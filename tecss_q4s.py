@@ -14,37 +14,41 @@ import time
 import socket
 import _thread
 from datetime import datetime
+import sys
 
 #Variables globales
 serverAddressPort = ("127.0.0.1", 20001) #Direccion
 UDPSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM) #Socket
 
+UDPSocket.bind(serverAddressPort)
+
 def receive_data(serverAddressPort):
 	'''Funcion que recibe datos en un socket udp'''
 	global UDPSocket
-	time.sleep(0.5)
 	while True:
 		try:
 			data, address = UDPSocket.recvfrom(100) #buffersize 10000
 			print("	Recibido")
 		except:
-			print("	Fallo recibiendo mensajes")
+			#print("	Fallo recibiendo mensajes")
 			continue
 
-		data_rcvd = struct.unpack('d',data)
-		print(data_rcvd)
+		data_rcvd = struct.unpack('f',data)
+		print("	",data_rcvd[0])
+		#time.sleep(0.01)
 	print("	Fallo general en receive_data")
 
 def send_data(serverAddressPort) :   
 	'''Funcion que envia datos en un socket udp'''
 	global UDPSocket
 	timestamp=time.time()
-	datos = struct.pack('d',timestamp)
+	datos = struct.pack('f',timestamp)
 	try:
 		UDPSocket.sendto(datos, serverAddressPort)
+		print("	Datos enviados")
 	except:
 		print("	Error al enviar datos")
-	print("	Datos enviados")
+	
 
 _thread.start_new_thread(receive_data, (serverAddressPort,))
 
