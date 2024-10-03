@@ -34,7 +34,9 @@ def receive_data(serverAddressPort):
 			continue
 
 		data_rcvd = struct.unpack('f',data)
-		print("	",data_rcvd[0])
+		timestamp_rcvd = data_rcvd[0]
+		time = datetime.fromtimestamp(timestamp_rcvd).strftime('%H:%M:%S')
+		print(f"	Timestamp: {time}")
 		#time.sleep(0.01)
 	print("	Fallo general en receive_data")
 
