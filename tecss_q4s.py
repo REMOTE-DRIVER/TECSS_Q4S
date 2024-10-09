@@ -32,19 +32,20 @@ def receive_data(serverAddressPort):
 			#print("	Fallo recibiendo mensajes")
 			continue
 
-		data_rcvd = struct.unpack('fI',data)
-		timestamp_rcvd = data_rcvd[0]
-		timestamp_str = datetime.fromtimestamp(timestamp_rcvd).strftime('%H:%M:%S')
+		data_rcvd = struct.unpack('20sI', data)  # 20 caracteres para la cadena
+		timestamp_rcvd_str = data_rcvd[0].decode('utf-8').strip('\x00')  # Decodificar la cadena y eliminar relleno
 		n_seq_server = data_rcvd[1]
-		print(f"	Recibido: n_seq: {n_seq_server} timestamp:{timestamp_rcvd}")
+		print(f"	Recibido: n_seq: {n_seq_server} timestamp:{timestamp_rcvd_str}")
 	print("	Fallo general en receive_data")
 
 def send_data(serverAddressPort) :   
 	'''Funcion que envia datos en un socket udp'''
 	global UDPSocket
 	global n_seq
+
 	timestamp=time.time()
-	datos = struct.pack('fI',timestamp, n_seq)
+	timestamp_str = str(timestamp) 
+	datos = struct.pack('20sI', timestamp_str.encode('utf-8'), n_seq)
 	try:
 		UDPSocket.sendto(datos, serverAddressPort)
 		print(f"	Enviado: n_seq:{n_seq}")
