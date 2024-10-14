@@ -26,14 +26,14 @@ def receive_data(serverAddressPort):
 	global UDPSocket
 	while True:
 		try:
-			data, address = UDPSocket.recvfrom(100) #buffersize 10000
+			data, address = UDPSocket.recvfrom(24) #20 timestamp + 4 int
 			#print("	Recibido")
 		except:
 			#print("	Fallo recibiendo mensajes")
 			continue
 
 		data_rcvd = struct.unpack('20sI', data)  # 20 caracteres para la cadena
-		timestamp_rcvd_str = data_rcvd[0].decode('utf-8').strip('\x00')  # Decodificar la cadena y eliminar relleno
+		timestamp_rcvd_str = data_rcvd[0].decode('ascii').strip('\x00')  # Decodificar la cadena y eliminar relleno
 		n_seq_server = data_rcvd[1]
 		print(f"	Recibido: n_seq: {n_seq_server} timestamp:{timestamp_rcvd_str}")
 	print("	Fallo general en receive_data")
@@ -44,8 +44,9 @@ def send_data(serverAddressPort) :
 	global n_seq
 
 	timestamp=time.time()
-	timestamp_str = str(timestamp) 
-	datos = struct.pack('20sI', timestamp_str.encode('utf-8'), n_seq)
+	timestamp_str = str(timestamp)
+	#TO DO:Se puede ajustar mas el timestamp, si en vez de dejar 20bytes, dejamos el maximo que pueda ocupar un timestamp 
+	datos = struct.pack('20sI', timestamp_str.encode('ascii'), n_seq) #se pude codificar en utf-8 tambien
 	try:
 		UDPSocket.sendto(datos, serverAddressPort)
 		print(f"	Enviado: n_seq:{n_seq}")
