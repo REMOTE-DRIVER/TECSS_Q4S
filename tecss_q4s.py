@@ -51,7 +51,7 @@ def send_data(serverAddressPort) :
 		n_seq+=1
 	except:
 		print("	Error al enviar datos")
-	
+
 
 UDPSocket.bind(serverAddressPort)
 _thread.start_new_thread(receive_data, (serverAddressPort,))
