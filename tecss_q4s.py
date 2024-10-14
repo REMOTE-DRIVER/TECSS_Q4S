@@ -55,11 +55,49 @@ def send_data(serverAddressPort) :
 		print("	Error al enviar datos")
 
 
-UDPSocket.bind(serverAddressPort)
+'''UDPSocket.bind(serverAddressPort)
 _thread.start_new_thread(receive_data, (serverAddressPort,))
 
 print("Empezamos:")
 for i in range(5):
 	print(f"Enviando paquete {i}")
-	send_data(serverAddressPort)
+	send_data(serverAddressPort)'''
 
+def server(serverAddressPort):
+	#Recibe paquetes num secuencia y timestamp
+	#Envia ese mismo numero secuencia
+	global UDPSocket
+	UDPSocket.bind(serverAddressPort)
+	while True:
+		try:
+			data, address = UDPSocket.recvfrom(24) #20 timestamp + 4 int
+			#print("	Recibido")
+		except:
+			#print("	Fallo recibiendo mensajes")
+			continue
+		try:
+			UDPSocket.sendto(datos, serverAddressPort)
+			print(f"	Enviado: n_seq:{n_seq}")
+			n_seq+=1
+		except:
+			print("	Error al enviar datos")
+
+def client(serverAddressPort):
+	#Manda paquetes com mum secuencia y timestamp
+	#Recibe paquetes con num secuencia
+	global UDPSocket
+	global n_seq
+	UDPSocket.bind(serverAddressPort)
+	while True:
+		try:
+			UDPSocket.sendto(datos, serverAddressPort)
+			print(f"	Enviado: n_seq:{n_seq}")
+			n_seq+=1
+		except:
+			print("	Error al enviar datos")
+		try:
+			data, address = UDPSocket.recvfrom(24) #20 timestamp + 4 int
+			#print("	Recibido")
+		except:
+			#print("	Fallo recibiendo mensajes")
+			continue
