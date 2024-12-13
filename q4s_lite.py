@@ -16,7 +16,6 @@ import logging
 #Paquete con tipo_mensaje,num secuencia, timestamp, latencia_up/down, jitter_up/down, packet_loss_up/down 
 #Tipos de mensaje: SYN, ACK, PING, RESP, DISC
 PACKET_FORMAT = ">4sidffffff"  # Formato de los datos
-#PACKET_FORMAT = ">4siddddddd"  # Formato de los datos72
 PACKET_SIZE = 48 #bytes
 
 MSG_FORMAT = 'utf-8'
@@ -25,8 +24,6 @@ syn_message = "SYN".ljust(4).encode(MSG_FORMAT)
 ping_message ="PING".encode(MSG_FORMAT)
 resp_message = "RESP".encode(MSG_FORMAT)
 disc_message = "DISC".encode(MSG_FORMAT)
-alert_message = "ALRT".encode(MSG_FORMAT)
-recovery_message = "RECO".encode(MSG_FORMAT)
 
 PACKET_LOSS_PRECISSION = 1000 #Precision de los paquetes perdidos
 LATENCY_ALERT = 360 #milisegundos
@@ -82,6 +79,10 @@ class q4s_lite_node():
         self.jitter_down=0.0
         self.packet_loss_up=0.0
         self.packet_loss_down=0.0
+        #average_measures
+        self.latency_combined = 0.0
+        self.jitter_combined = 0.0
+        self.packet_loss_combined = 0.0
         #packet_loss control
         self.packets_received = [0] * PACKET_LOSS_PRECISSION
         self.total_received = PACKET_LOSS_PRECISSION
@@ -314,23 +315,7 @@ class q4s_lite_node():
                 continue
         return
 
-    def measurement_stage(self):
-        self.state=("normal",None)
-        self.measuring = True
-        if self.role=="server":
-            self.hilo_rcv.start()
-            self.hilo_snd.start()
-        else:
-            self.hilo_snd.start()
-            self.hilo_rcv.start()
-        print("[MEASUREMENT PHASE] Press ctrl+c to stop")
-        try:
-            while True:#Aqui se puede poner menu de control con simulacion de perdidas etc...
-                time.sleep(0.1)
-        except KeyboardInterrupt:
-            self.measuring=False
-            self.hilo_snd.join()
-            self.hilo_rcv.join()
+        
 
     def run(self):
         #try:
@@ -347,10 +332,16 @@ class q4s_lite_node():
             self.hilo_rcv = threading.Thread(target=self.measurement_receive_message, daemon=True, name="hilo_rcv")
             self.hilo_snd = threading.Thread(target=self.measurement_send_ping, daemon=True, name="hilo_snd")
             
-            self.measurement_stage()
+            self.state=("normal",None)
+            self.measuring = True
+            if self.role=="server":
+                self.hilo_rcv.start()
+                self.hilo_snd.start()
+            else:
+                self.hilo_snd.start()
+                self.hilo_rcv.start()
+            print("[MEASUREMENT PHASE] Press ctrl+c to stop")
 
-            print("") #Los prints de la etapa de medicion terminan en /r, salto de linea para no escribir encima
-            print("Terminado")
 
         else:
             print("Conexion fallida")
@@ -366,12 +357,28 @@ if __name__=="__main__":
             logger.addHandler(server_handler)
             q4s_node = q4s_lite_node("server",server_address, server_port, client_address, client_port)
             q4s_node.run()
+            try:
+                while True:#Aqui se puede poner menu de control con simulacion de perdidas etc...
+                    time.sleep(0.1)
+            except KeyboardInterrupt:
+                q4s_node.measuring=False
+                q4s_node.hilo_snd.join()
+                q4s_node.hilo_rcv.join()
+                print("")
             print("You can see q4s_server.log for viewing execution")
         elif sys.argv[1] == "-c":
             logger.addHandler(client_handler)
 
             q4s_node = q4s_lite_node("client",client_address, client_port, server_address, server_port)
             q4s_node.run()
+            try:
+                while True:#Aqui se puede poner menu de control con simulacion de perdidas etc...
+                    time.sleep(0.1)
+            except KeyboardInterrupt:
+                q4s_node.measuring=False
+                q4s_node.hilo_snd.join()
+                q4s_node.hilo_rcv.join()
+
             print("You can see q4s_client.log for viewing execution")
         else:
             print("Opcion no reconocida\nUsage:  ")
