@@ -285,23 +285,14 @@ class q4s_lite_node():
                         self.latency_down,self.jitter_down,self.packet_loss_down = self.get_metrics(timestamp_recepcion,unpacked_data[2],self.latency_down,self.total_received)
                         #TODO:como imprimire el combined, esto se quitara de aqui
                         print(f"[MEASURING (down)] Latency:{self.latency_down:.10f} Jitter: {self.jitter_down:.10f} Packet_loss: {self.packet_loss_down:.3f}", end="\r")
-                
-                        #despues de medir si ser superan umbrales de latencia o packet loss se emite mensaje alerta
-                        #se pone en estado de alerta, si estando en alerta se arregla se manda recovery y se pasa a estado normal
-                        #self.check_alert(self.latency_down,self.packet_loss_down, unpacked_data)
                     elif self.role=="client":
                         self.latency_up,self.jitter_up,self.packet_loss_up = self.get_metrics(timestamp_recepcion,unpacked_data[2],self.latency_up,self.total_received)
-                        
                         print(f"[MEASURING (up)] Latency:{self.latency_up:.10f} Jitter: {self.jitter_up:.10f} Packet_loss: {self.packet_loss_up:.3f}", end="\r")
-                        #despues de medir si ser superan umbrales de latencia o packet loss se emite mensaje alerta
-                        #se pone en estado de alerta, si estando en alerta se arregla se manda recovery y se pasa a estado normal
-                        #self.check_alert(self.latency_up,self.packet_loss_up, unpacked_data)
-                    #TODO aqui se hace el check_alert con las medias de las medidas up y down
                     print("")
                     self.latency_combined = (self.latency_up+self.latency_down)/2
                     self.packet_loss_combined = (self.packet_loss_up+self.packet_loss_down)/2
-                    #TODO se quita el checkalert por rol
-                    #TODO printar el combined, los datos por rol se pueden ir al log
+                    #TODO printar el combined, los datos por rol se pueden ir al log, cambiar la aparicion de este mensaje
+                    print(f"[MEASURING (combined)] Latency:{self.latency_combined:.10f} Packet_loss: {self.packet_loss_combined:.3f}", end="\r")
                     self.check_alert(self.latency_combined,self.packet_loss_combined)
 
             except KeyboardInterrupt:
