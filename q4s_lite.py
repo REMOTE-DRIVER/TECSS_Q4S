@@ -27,7 +27,7 @@ disc_message = "DISC".encode(MSG_FORMAT)
 
 PACKET_LOSS_PRECISSION = 1000 #Precision de los paquetes perdidos
 LATENCY_ALERT = 360 #milisegundos
-PACKET_LOSS_ALERT = 0.02 #50%
+PACKET_LOSS_ALERT = 0.02 #2%
 RECOVERY_TIME = 2 #segundos
 
 server_address, server_port = "127.0.0.1",20001
@@ -222,7 +222,8 @@ class q4s_lite_node():
             self.jitter_down = data_from_packet[6]
             self.packet_loss_down = data_from_packet[8]
 
-    def check_alert(self,latency,packet_loss,data):
+    #def check_alert(self,latency,packet_loss,data): #Quito el data porque ya no envio mensaje, lanzo alerta al actuador
+    def check_alert(self,latency,packet_loss):
         logger.debug(f"ESTADO: {self.state}")
         #check_alert.last_check=timestamp
         #si ha pasado menos de un segundo desde la ultima invocacion a alert, return
@@ -282,25 +283,26 @@ class q4s_lite_node():
                     
                     if self.role=="server":
                         self.latency_down,self.jitter_down,self.packet_loss_down = self.get_metrics(timestamp_recepcion,unpacked_data[2],self.latency_down,self.total_received)
-                        #TODO:como imprimire el avg, esto se quitara de aqui
-                        if self.seq_number%50==0:
-                            print(f"[MEASURING (down)] Latency:{self.latency_down:.10f} Jitter: {self.jitter_down:.10f} Packet_loss: {self.packet_loss_down:.3f}", end="\r")
+                        #TODO:como imprimire el combined, esto se quitara de aqui
+                        print(f"[MEASURING (down)] Latency:{self.latency_down:.10f} Jitter: {self.jitter_down:.10f} Packet_loss: {self.packet_loss_down:.3f}", end="\r")
                 
                         #despues de medir si ser superan umbrales de latencia o packet loss se emite mensaje alerta
                         #se pone en estado de alerta, si estando en alerta se arregla se manda recovery y se pasa a estado normal
                         #self.check_alert(self.latency_down,self.packet_loss_down, unpacked_data)
                     elif self.role=="client":
                         self.latency_up,self.jitter_up,self.packet_loss_up = self.get_metrics(timestamp_recepcion,unpacked_data[2],self.latency_up,self.total_received)
-                        if self.seq_number%50==0:
-                            print(f"[MEASURING (up)] Latency:{self.latency_up:.10f} Jitter: {self.jitter_up:.10f} Packet_loss: {self.packet_loss_up:.3f}", end="\r")
+                        
+                        print(f"[MEASURING (up)] Latency:{self.latency_up:.10f} Jitter: {self.jitter_up:.10f} Packet_loss: {self.packet_loss_up:.3f}", end="\r")
                         #despues de medir si ser superan umbrales de latencia o packet loss se emite mensaje alerta
                         #se pone en estado de alerta, si estando en alerta se arregla se manda recovery y se pasa a estado normal
                         #self.check_alert(self.latency_up,self.packet_loss_up, unpacked_data)
                     #TODO aqui se hace el check_alert con las medias de las medidas up y down
-                    #latency_avg = (self.latency_up+self.latency_down)/2
-                    #packet_loss_avg=
+                    print("")
+                    self.latency_combined = (self.latency_up+self.latency_down)/2
+                    self.packet_loss_combined = (self.packet_loss_up+self.packet_loss_down)/2
                     #TODO se quita el checkalert por rol
-                    #self.check_alert(self.latency_avg,self.packet_loss_avg)
+                    #TODO printar el combined, los datos por rol se pueden ir al log
+                    self.check_alert(self.latency_combined,self.packet_loss_combined)
 
             except KeyboardInterrupt:
                 self.measuring=False
@@ -368,7 +370,6 @@ if __name__=="__main__":
             print("You can see q4s_server.log for viewing execution")
         elif sys.argv[1] == "-c":
             logger.addHandler(client_handler)
-
             q4s_node = q4s_lite_node("client",client_address, client_port, server_address, server_port)
             q4s_node.run()
             try:
