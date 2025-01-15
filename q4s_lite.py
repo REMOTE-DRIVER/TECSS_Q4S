@@ -30,6 +30,15 @@ LATENCY_ALERT = 360 #milisegundos
 PACKET_LOSS_ALERT = 0.02 #2%
 RECOVERY_TIME = 2 #segundos
 
+#Estrategias de combinacion de medidas, la media, la mayor, la menor,no hacer nada, etc...
+MEASURE_COMBINATIONS = [lambda x,y,z: (x+y)/2,
+                        lambda x,y,z:max(x,y),
+                        lambda x,y,z:min(x,y),
+                        lambda x,y,z: x if z=="client" else y]
+MEASURE_COMBINATION_STRATEGY = 0
+COMBINED_FUNC = MEASURE_COMBINATIONS[MEASURE_COMBINATION_STRATEGY]
+
+
 server_address, server_port = "127.0.0.1",20001
 client_address, client_port = "127.0.0.1",20002
 #server_address, server_port = "192.168.1.113", 20001
@@ -189,8 +198,7 @@ class q4s_lite_node():
                 self.packet_loss_down
                 )
             packet = struct.pack(PACKET_FORMAT, *packet_data)
-            try:
-                
+            try:                
                 self.socket.sendto(packet, self.target_address)
                 logger.debug(f"[MEASURING SEND PING] n_seq:{packet_data[1]}: lat_up:{packet_data[3]} lat_down:{packet_data[4]} jit_up:{packet_data[5]} jit_down:{packet_data[6]} pl_up:{packet_data[7]} pl_down:{packet_data[8]}")
                 #print(f"ENVIO PING n_seq:{packet_data[1]}: lat_up:{packet_data[3]} lat_down:{packet_data[4]} jit_up:{packet_data[5]} jit_down:{packet_data[6]} pl_up:{packet_data[7]} pl_down:{packet_data[8]}")
@@ -280,18 +288,15 @@ class q4s_lite_node():
                     #self.total_received+=1 #self.packets_received[unpacked_data[1]]
                     #si seq_number que me llega esta muy cerca de self.seq_number
                     logger.debug(f"[MEASURING RECEIVE RESP] n_seq:{unpacked_data[1]}: lat_up:{unpacked_data[3]} lat_down:{unpacked_data[4]} jit_up:{unpacked_data[5]} jit_down:{unpacked_data[6]} pl_up:{unpacked_data[7]} pl_down:{unpacked_data[8]}")
-                    
                     if self.role=="server":
                         self.latency_down,self.jitter_down,self.packet_loss_down = self.get_metrics(timestamp_recepcion,unpacked_data[2],self.latency_down,self.total_received)
-                        #TODO:como imprimire el combined, esto se quitara de aqui
-                        print(f"[MEASURING (down)] Latency:{self.latency_down:.10f} Jitter: {self.jitter_down:.10f} Packet_loss: {self.packet_loss_down:.3f}", end="\r")
+                        logger.debug(f"[MEASURING (down)] Latency:{self.latency_down:.10f} Jitter: {self.jitter_down:.10f} Packet_loss: {self.packet_loss_down:.3f}")
                     elif self.role=="client":
                         self.latency_up,self.jitter_up,self.packet_loss_up = self.get_metrics(timestamp_recepcion,unpacked_data[2],self.latency_up,self.total_received)
-                        print(f"[MEASURING (up)] Latency:{self.latency_up:.10f} Jitter: {self.jitter_up:.10f} Packet_loss: {self.packet_loss_up:.3f}", end="\r")
-                    print("")
-                    self.latency_combined = (self.latency_up+self.latency_down)/2
-                    self.packet_loss_combined = (self.packet_loss_up+self.packet_loss_down)/2
-                    #TODO printar el combined, los datos por rol se pueden ir al log, cambiar la aparicion de este mensaje
+                        logger.debug(f"[MEASURING (up)] Latency:{self.latency_up:.10f} Jitter: {self.jitter_up:.10f} Packet_loss: {self.packet_loss_up:.3f}")    
+                    #Combinacion de medidas
+                    self.latency_combined = COMBINED_FUNC(self.latency_up,self.latency_down,self.role)
+                    self.packet_loss_combined = COMBINED_FUNC(self.packet_loss_up,self.packet_loss_down,self.role)
                     print(f"[MEASURING (combined)] Latency:{self.latency_combined:.10f} Packet_loss: {self.packet_loss_combined:.3f}", end="\r")
                     self.check_alert(self.latency_combined,self.packet_loss_combined)
 
@@ -357,8 +362,7 @@ if __name__=="__main__":
                 q4s_node.measuring=False
                 q4s_node.hilo_snd.join()
                 q4s_node.hilo_rcv.join()
-                print("")
-            print("You can see q4s_server.log for viewing execution")
+            print("\nYou can see q4s_server.log for viewing execution")
         elif sys.argv[1] == "-c":
             logger.addHandler(client_handler)
             q4s_node = q4s_lite_node("client",client_address, client_port, server_address, server_port)
@@ -370,8 +374,7 @@ if __name__=="__main__":
                 q4s_node.measuring=False
                 q4s_node.hilo_snd.join()
                 q4s_node.hilo_rcv.join()
-
-            print("You can see q4s_client.log for viewing execution")
+            print("\nYou can see q4s_client.log for viewing execution")
         else:
             print("Opcion no reconocida\nUsage:  ")
     else:
