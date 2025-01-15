@@ -206,6 +206,9 @@ class q4s_lite_node():
                 self.total_received-=self.packets_received[self.seq_number]
                 self.packets_received[self.seq_number] = 1
                 self.seq_number = (self.seq_number+1)%PACKET_LOSS_PRECISSION
+                #Packet loss strategy: Como mido por tandas, primero no mido, luego si, luego no, otra vez si... reseteo el total_received
+                if self.seq_number == 0:
+                    self.total_received = PACKET_LOSS_PRECISSION
                 time.sleep(0.03)#Esto es la cadencia de paquetes por segundo, configurable tambien
                 #responsividad es packetloss_precission/cadencia
             except KeyboardInterrupt:
