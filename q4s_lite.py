@@ -99,6 +99,8 @@ class q4s_lite_node():
         self.state=None,None #Es una tupla de nombre estado, timestamp cuando se puso, para poder calcular el recovery
         #lock para acceso critico
         self.lock = threading.Lock()
+        #evento para mandar la señal TIENE QUE CREARSE CON ESTE PARAMETRO O ES NONE
+        #self.event = threading.Event()
 
     def init_connection_server(self):
         #print("[INIT CONNECTION] SERVER: Waiting for connection")
@@ -165,6 +167,7 @@ class q4s_lite_node():
             logger.info("[INIT CONNECTION] CLIENT: Error, no se puede conectar al servidor")
             return -1
 
+
     @staticmethod
     def get_metrics(reception_time,sent_time,last_latency,total_received):
         new_latency = ((reception_time-sent_time)*1000)/2 #rtt/2
@@ -201,10 +204,9 @@ class q4s_lite_node():
             try:                
                 self.socket.sendto(packet, self.target_address)
                 logger.debug(f"[MEASURING SEND PING] n_seq:{packet_data[1]}: lat_up:{packet_data[3]} lat_down:{packet_data[4]} jit_up:{packet_data[5]} jit_down:{packet_data[6]} pl_up:{packet_data[7]} pl_down:{packet_data[8]}")
-                #print(f"ENVIO PING n_seq:{packet_data[1]}: lat_up:{packet_data[3]} lat_down:{packet_data[4]} jit_up:{packet_data[5]} jit_down:{packet_data[6]} pl_up:{packet_data[7]} pl_down:{packet_data[8]}")
-                #TODO: METER EL LOCK AQUI
-                self.total_received-=self.packets_received[self.seq_number]
-                self.packets_received[self.seq_number] = 1
+                with self.lock:
+                    self.total_received-=self.packets_received[self.seq_number]
+                    self.packets_received[self.seq_number] = 1
                 self.seq_number = (self.seq_number+1)%PACKET_LOSS_PRECISSION
                 #Packet loss strategy: Como mido por tandas, primero no mido, luego si, luego no, otra vez si... reseteo el total_received
                 if self.seq_number == 0:
@@ -271,12 +273,6 @@ class q4s_lite_node():
                 timestamp_recepcion = time.time()
                 unpacked_data = struct.unpack(PACKET_FORMAT, data)
                 message_type = unpacked_data[0].decode(MSG_FORMAT).strip()  # El tipo de mensaje es el primer campo
-                #Estoy actualizando solo si el mensaje es tipo ping que esta mas actualizado que el resp que puede arrastrar ceros desde el principio
-                #with self.lock:
-                #    self.update_measures(unpacked_data)
-                #print(f"Me llega un mensaje {unpacked_data[0]} ({unpacked_data[2]}) con n_seq:{unpacked_data[1]}: lat_up:{unpacked_data[3]} lat_down:{unpacked_data[4]} jit_up:{unpacked_data[5]} jit_down:{unpacked_data[6]} pl_up:{unpacked_data[7]} pl_down:{unpacked_data[8]}")
-                #print(f"Me llega un mensaje {unpacked_data[0]} ({unpacked_data[2]}) con n_seq:{unpacked_data[1]}: lat_up:{self.latency_up} lat_down:{self.latency_down} jit_up:{self.jitter_up} jit_down:{self.jitter_down} pl_up:{self.packet_loss_up} pl_down:{self.packet_loss_down}")
-                #logger.debug(f"[MEASURING] Recibido paquete (Tipo={message_type}, Datos={unpacked_data})")
                 if message_type == "PING": #PING
                     self.update_measures(unpacked_data)
                     logger.debug(f"[MEASURING RECEIVE PING] n_seq:{unpacked_data[1]}: lat_up:{unpacked_data[3]} lat_down:{unpacked_data[4]} jit_up:{unpacked_data[5]} jit_down:{unpacked_data[6]} pl_up:{unpacked_data[7]} pl_down:{unpacked_data[8]}")
@@ -285,11 +281,11 @@ class q4s_lite_node():
                     self.socket.sendto(packet,self.target_address)
                     logger.debug(f"[MEASURING CONTEST RESP] n_seq:{packet_data[1]}: lat_up:{packet_data[3]} lat_down:{packet_data[4]} jit_up:{packet_data[5]} jit_down:{packet_data[6]} pl_up:{packet_data[7]} pl_down:{packet_data[8]}")
                 elif message_type == "RESP": #RESP
-                    #actualizo el packet received
-                    #TODO:Meter el lock aqui
-                    self.packets_received[unpacked_data[1]]=0
-                    #self.total_received+=1 #self.packets_received[unpacked_data[1]]
-                    #si seq_number que me llega esta muy cerca de self.seq_number
+                    #actualizo el packet received                    
+                    with self.lock:
+                        self.packets_received[unpacked_data[1]]=0
+                        #lo puedo poner a 1 para medir antes y no esperar tanto entre mediciones
+                        #self.total_received+=1 #self.packets_received[unpacked_data[1]]                    
                     logger.debug(f"[MEASURING RECEIVE RESP] n_seq:{unpacked_data[1]}: lat_up:{unpacked_data[3]} lat_down:{unpacked_data[4]} jit_up:{unpacked_data[5]} jit_down:{unpacked_data[6]} pl_up:{unpacked_data[7]} pl_down:{unpacked_data[8]}")
                     if self.role=="server":
                         self.latency_down,self.jitter_down,self.packet_loss_down = self.get_metrics(timestamp_recepcion,unpacked_data[2],self.latency_down,self.total_received)
