@@ -82,6 +82,8 @@ class q4s_lite_node():
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.socket.bind((address, port))
         self.target_address = (target_address, target_port)
+        #execution check
+        self.running=False
         #measurement stage params
         self.hilo_rcv=None
         self.hilo_snd=None
@@ -236,6 +238,23 @@ class q4s_lite_node():
     #def check_alert(self,latency,packet_loss,data): #Quito el data porque ya no envio mensaje, lanzo alerta al actuador
     def check_alert(self,alert_latency,alert_packet_loss):
         #Se invoca con booleanos si hay alerta, para comprobar si la alerta es nueva o lleva un rato en alerta
+        '''if alert_latency or alert_packet_loss:
+            if self.state[0]=="normal":
+                self.state="alert",time.time()
+                if self.event != None:
+                    self.event.set()
+                logger.debug(f"[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
+                print(f"\n[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
+            elif self.state[0]=="alert":
+                if time.time()-self.state[1]>=KEEP_ALERT_TIME:#Solo comprueba si ha pasado x tiempo, esto se puede comprobar antes de invocar
+                    self.state="alert",time.time()
+                    if self.event != None:
+                        self.event.set()
+                    logger.debug(f"[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
+                    print(f"\n[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
+        elif time.time()-self.state[1]>=KEEP_ALERT_TIME:
+            #Cambiar estado a normal
+            pass'''
         logger.debug(f"ESTADO: {self.state}")
         if self.state[0]=="normal":
             if alert_latency or alert_packet_loss:
@@ -244,7 +263,7 @@ class q4s_lite_node():
                     self.event.set()
                 logger.debug(f"[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
                 print(f"\n[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
-        if self.state[0]=="alert":
+        elif self.state[0]=="alert":
             if time.time()-self.state[1]>=KEEP_ALERT_TIME:#Solo comprueba si ha pasado x tiempo, esto se puede comprobar antes de invocar
                 if alert_latency or alert_packet_loss:
                     self.state="alert",time.time()
@@ -292,6 +311,7 @@ class q4s_lite_node():
                     self.packet_loss_combined = COMBINED_FUNC(self.packet_loss_up,self.packet_loss_down,self.role)
                     
                     #Posible TODO: Printar y comprobar alertas cada n paquetes, los necesarios para dar una alarma cada SMOOTHING_PARAM Paquetes
+                    #mejor llamar mucho y comprobarlo dentro, en caso de fallo llegan pocos recoveries y puedes perder tiempo
                     print(f"[MEASURING (combined)] Latency:{self.latency_combined:.10f} Packet_loss: {self.packet_loss_combined:.3f}", end="\r")
                     self.check_alert(self.latency_combined>LATENCY_ALERT,self.packet_loss_combined>PACKET_LOSS_ALERT)
 
@@ -313,6 +333,7 @@ class q4s_lite_node():
     def run(self):
         #try:
         #inicio conexion
+        self.running = True
         if self.role=="server":
             init = self.init_connection_server()
         elif self.role=="client":
@@ -337,6 +358,7 @@ class q4s_lite_node():
 
 
         else:
+            self.running=False
             print("Conexion fallida")
 
 
