@@ -28,9 +28,15 @@ disc_message = "DISC".encode(MSG_FORMAT)
 PACKET_LOSS_PRECISSION = 1000 #Precision de los paquetes perdidos
 LATENCY_ALERT = 360 #milisegundos
 PACKET_LOSS_ALERT = 0.02 #2%
-RECOVERY_TIME = 2 #segundos
+KEEP_ALERT_TIME = 1 #segundos que estas en estado de alerta a partir del cual vuelve a avisar al actuador, para no avisarle en todos los paquetes
+
+#Estrategias de combinacion de latencia
+SMOOTHING_PARAM = 20#segun la estrategia, es el parametro n o alfa (numero de paquetes hasta latencia maxima, o factor de suavizado)
+TIME_TO_GET_LATENCY = 1#Segundos hasta llegar a la latencia real
+TIME_BETWEEN_PINGS = 1/SMOOTHING_PARAM*TIME_TO_GET_LATENCY
 
 #Estrategias de combinacion de medidas, la media, la mayor, la menor,no hacer nada, etc...
+#x e y son las latencias de cada lado, z es el rol de quien invoca
 MEASURE_COMBINATIONS = [lambda x,y,z: (x+y)/2,
                         lambda x,y,z:max(x,y),
                         lambda x,y,z:min(x,y),
@@ -67,7 +73,7 @@ client_handler.setFormatter(formatter)
 
 class q4s_lite_node():
 
-    def __init__(self, role, address, port, target_address, target_port):
+    def __init__(self, role, address, port, target_address, target_port, event=None):
         #El rol importa para iniciar conex o medir up/down
         self.role = role 
         #udp socket params
@@ -96,11 +102,11 @@ class q4s_lite_node():
         self.packets_received = [0] * PACKET_LOSS_PRECISSION
         self.total_received = PACKET_LOSS_PRECISSION
         #state
-        self.state=None,None #Es una tupla de nombre estado, timestamp cuando se puso, para poder calcular el recovery
+        self.state=None,None #Es una tupla de nombre estado, timestamp cuando se puso, ver si la alerta es larga
         #lock para acceso critico
         self.lock = threading.Lock()
-        #evento para mandar la señal TIENE QUE CREARSE CON ESTE PARAMETRO O ES NONE
-        #self.event = threading.Event()
+        #evento para mandar la señal al modulo de actuacion o publicacion
+        self.event = event
 
     def init_connection_server(self):
         #print("[INIT CONNECTION] SERVER: Waiting for connection")
@@ -167,24 +173,16 @@ class q4s_lite_node():
             logger.info("[INIT CONNECTION] CLIENT: Error, no se puede conectar al servidor")
             return -1
 
-
     @staticmethod
     def get_metrics(reception_time,sent_time,last_latency,total_received):
         new_latency = ((reception_time-sent_time)*1000)/2 #rtt/2
         jitter = abs(new_latency-last_latency) #El valor absoluto
-        #amortiguacion sencilla
-        '''if (new_latency>last_latency+1):
-            new_latency = last_latency+1
-        elif (new_latency<last_latency-1):
-            new_latency=last_latency-1
-        else:
-            new_latency = last_latency'''
+        #amortiguacion 
+        #smoothed_latency = SMOOTHING_PARAM * new_latency + (1 - SMOOTHING_PARAM) * last_latency
+        smothed_latency = last_latency + ((new_latency - last_latency) / SMOOTHING_PARAM)
         #loss
         loss=((PACKET_LOSS_PRECISSION-total_received)/PACKET_LOSS_PRECISSION)
-        #Hay que restar las perdidas por transito: rtt*frecuencia envio paquetes, no son perdidos todavia
-        #JJ: No considerar perdida los ultimos paquetes en transito
-        #
-        return new_latency,jitter,loss
+        return smothed_latency,jitter,loss
 
     def measurement_send_ping(self):
         while self.measuring:
@@ -211,7 +209,7 @@ class q4s_lite_node():
                 #Packet loss strategy: Como mido por tandas, primero no mido, luego si, luego no, otra vez si... reseteo el total_received
                 if self.seq_number == 0:
                     self.total_received = PACKET_LOSS_PRECISSION
-                time.sleep(0.03)#Esto es la cadencia de paquetes por segundo, configurable tambien
+                time.sleep(TIME_BETWEEN_PINGS)#Esto es la cadencia de paquetes por segundo, configurable tambien
                 #responsividad es packetloss_precission/cadencia
             except KeyboardInterrupt:
                 self.measuring=False
@@ -236,33 +234,27 @@ class q4s_lite_node():
             self.packet_loss_down = data_from_packet[8]
 
     #def check_alert(self,latency,packet_loss,data): #Quito el data porque ya no envio mensaje, lanzo alerta al actuador
-    def check_alert(self,latency,packet_loss):
+    def check_alert(self,alert_latency,alert_packet_loss):
+        #Se invoca con booleanos si hay alerta, para comprobar si la alerta es nueva o lleva un rato en alerta
         logger.debug(f"ESTADO: {self.state}")
-        #check_alert.last_check=timestamp
-        #si ha pasado menos de un segundo desde la ultima invocacion a alert, return
         if self.state[0]=="normal":
-            if latency > LATENCY_ALERT or packet_loss>PACKET_LOSS_ALERT:
+            if alert_latency or alert_packet_loss:
                 self.state="alert",time.time()
-                #sendalert
-                packet_data=(alert_message,0,self.state[1],data[3],data[4],data[5],data[6],data[7],data[8])#mejor mando self y no data
-                datos = struct.pack(PACKET_FORMAT,*packet_data)
-                #self.socket.sendto(datos,self.target_address)
-                #Logica del actuador, que sería una funcion de callback con la que le han llamado
-                print(f"\n[ALERT]: Latency:{latency}/{LATENCY_ALERT} Packet_loss: {packet_loss}/{PACKET_LOSS_ALERT}")
-        elif self.state[0]=="alert":#el recovery debe ser cuando se ha recuperado durante un tiempo, habria que guardar el timestamp del alert
-            if latency < LATENCY_ALERT and packet_loss < PACKET_LOSS_ALERT:
-                #check tiempo pasado para salir de alerta mandar reco o no
-                if (self.state[1]-time.time()) > RECOVERY_TIME:
-                    self.state="normal",None
-                    #sendreco #con los datos self?
-                    #llamo a callback para recovery
-                    #la logica del actuador es la que se encarga de todo, el callback es el mismo
-            elif latency > LATENCY_ALERT or packet_loss>PACKET_LOSS_ALERT:
-                #sendalert
-                packet_data=(alert_message,0,self.state[1],data[3],data[4],data[5],data[6],data[7],data[8])#mejor mando self y no data
-                datos = struct.pack(PACKET_FORMAT,*packet_data)
-                #self.socket.sendto(datos,self.target_address)
-                print(f"\n[ALERT]: Latency:{latency}/{LATENCY_ALERT} Packet_loss: {packet_loss}/{PACKET_LOSS_ALERT}")
+                if self.event != None:
+                    self.event.set()
+                logger.debug(f"[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
+                print(f"\n[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
+        if self.state[0]=="alert":
+            if time.time()-self.state[1]>=KEEP_ALERT_TIME:#Solo comprueba si ha pasado x tiempo, esto se puede comprobar antes de invocar
+                if alert_latency or alert_packet_loss:
+                    self.state="alert",time.time()
+                    if self.event != None:
+                        self.event.set()
+                    logger.debug(f"[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
+                    print(f"\n[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
+                else:
+                    self.state="normal",time.time()
+                    logger.debug(f"[RECOVERY]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
 
     def measurement_receive_message(self):
         while self.measuring:
@@ -287,17 +279,21 @@ class q4s_lite_node():
                         #lo puedo poner a 1 para medir antes y no esperar tanto entre mediciones
                         #self.total_received+=1 #self.packets_received[unpacked_data[1]]                    
                     logger.debug(f"[MEASURING RECEIVE RESP] n_seq:{unpacked_data[1]}: lat_up:{unpacked_data[3]} lat_down:{unpacked_data[4]} jit_up:{unpacked_data[5]} jit_down:{unpacked_data[6]} pl_up:{unpacked_data[7]} pl_down:{unpacked_data[8]}")
+                    
                     if self.role=="server":
                         self.latency_down,self.jitter_down,self.packet_loss_down = self.get_metrics(timestamp_recepcion,unpacked_data[2],self.latency_down,self.total_received)
                         logger.debug(f"[MEASURING (down)] Latency:{self.latency_down:.10f} Jitter: {self.jitter_down:.10f} Packet_loss: {self.packet_loss_down:.3f}")
                     elif self.role=="client":
                         self.latency_up,self.jitter_up,self.packet_loss_up = self.get_metrics(timestamp_recepcion,unpacked_data[2],self.latency_up,self.total_received)
                         logger.debug(f"[MEASURING (up)] Latency:{self.latency_up:.10f} Jitter: {self.jitter_up:.10f} Packet_loss: {self.packet_loss_up:.3f}")    
+                    
                     #Combinacion de medidas
                     self.latency_combined = COMBINED_FUNC(self.latency_up,self.latency_down,self.role)
                     self.packet_loss_combined = COMBINED_FUNC(self.packet_loss_up,self.packet_loss_down,self.role)
+                    
+                    #Posible TODO: Printar y comprobar alertas cada n paquetes, los necesarios para dar una alarma cada SMOOTHING_PARAM Paquetes
                     print(f"[MEASURING (combined)] Latency:{self.latency_combined:.10f} Packet_loss: {self.packet_loss_combined:.3f}", end="\r")
-                    self.check_alert(self.latency_combined,self.packet_loss_combined)
+                    self.check_alert(self.latency_combined>LATENCY_ALERT,self.packet_loss_combined>PACKET_LOSS_ALERT)
 
             except KeyboardInterrupt:
                 self.measuring=False
