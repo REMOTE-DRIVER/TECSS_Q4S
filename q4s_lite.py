@@ -317,15 +317,26 @@ class q4s_lite_node():
 
             except KeyboardInterrupt:
                 self.measuring=False
+            except socket.timeout:
+                self.measuring = False
+                self.running = False
+                print("\nConection timeout")
             except ConnectionResetError as e:
                 #Si el so cierra la conexion porque no esta levantado el otro extremo
-                #Tambien si se cae el otro extremo
-                continue
+                #Tambien si se cae el otro extremo, esto ocurre cuando lo pruebo en local, en dos maquinas se podra gestionar bien TODO
+                #Esto ocurre en cuanto se corta la conexion
+                #print("hola ",e)
+                print("\nConection error")
+                self.measuring = False
+                self.running = False
+                #continue
             except Exception as error:
                 #pass
                 #print(f"Error recibiendo mensajes {error}")#suelen entrar timeouts, tratar en el futuro
                 #self.measuring = False
                 continue
+        self.socket.close()
+        print("\n[MEASURING] END")
         return
 
         
@@ -341,7 +352,7 @@ class q4s_lite_node():
         else:
             init = -1
         if init == 0:
-            self.socket.settimeout(1)#un segundo antes de perdida de conex, mejor valor 360ms
+            self.socket.settimeout(1)#un segundo antes de perdida de conex, mejor valor 360ms, podria ser una vble global, o a fuego por precaucion
             
             self.hilo_rcv = threading.Thread(target=self.measurement_receive_message, daemon=True, name="hilo_rcv")
             self.hilo_snd = threading.Thread(target=self.measurement_send_ping, daemon=True, name="hilo_snd")
@@ -363,7 +374,7 @@ class q4s_lite_node():
 
 
 if __name__=="__main__":
-
+    main_run = True
     #os.system('cls' if os.name == 'nt' else 'clear')
     if len(sys.argv)<2:
         print("Usage")
@@ -373,8 +384,11 @@ if __name__=="__main__":
             q4s_node = q4s_lite_node("server",server_address, server_port, client_address, client_port)
             q4s_node.run()
             try:
-                while True:#Aqui se puede poner menu de control con simulacion de perdidas etc...
+                while q4s_node.running:#Aqui se puede poner menu de control con simulacion de perdidas etc...
                     time.sleep(0.1)
+                    '''option = input("\npulsa 0 para salir\n")
+                    if option == '0':
+                        main_run=False'''
             except KeyboardInterrupt:
                 q4s_node.measuring=False
                 q4s_node.hilo_snd.join()
@@ -385,8 +399,11 @@ if __name__=="__main__":
             q4s_node = q4s_lite_node("client",client_address, client_port, server_address, server_port)
             q4s_node.run()
             try:
-                while True:#Aqui se puede poner menu de control con simulacion de perdidas etc...
+                while q4s_node.running:#Aqui se puede poner menu de control con simulacion de perdidas etc...
                     time.sleep(0.1)
+                    '''option = input("\npulsa 0 para salir\n")
+                    if option == '0':
+                        main_run=False'''
             except KeyboardInterrupt:
                 q4s_node.measuring=False
                 q4s_node.hilo_snd.join()

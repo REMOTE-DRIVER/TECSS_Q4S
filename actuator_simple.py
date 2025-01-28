@@ -19,18 +19,21 @@ def actuator(q4s_node):
 
 if __name__=="__main__":
 	#El actuador es el cliente por defecto, ya que va en el coche
-	q4s_node = q4s_lite_node("client",client_address, client_port, server_address, server_port,event)
-    q4s_node.run()
-    actuator_thread = threading.Thread(target=actuator,args=(q4s_node),daemon=True)
-    actuator_thread.start()
-    try:
+	q4s_node = q4s_lite.q4s_lite_node("client",client_address, client_port, server_address, server_port,event)
+	q4s_node.run()
+	actuator_thread = threading.Thread(target=actuator,args=(q4s_node,),daemon=True)
+	actuator_thread.start()
+	#El actuador no tiene que funcionar igual con el while true, podria tener un join y parar cuando quieras en la funcion actuator
+	try:
 		while True:
 			time.sleep(0.1)
 	except KeyboardInterrupt:
 		q4s_node.running=False
 		q4s_node.hilo_snd.join()
-        q4s_node.hilo_rcv.join()
-    print("\nYou can see q4s_client.log for viewing execution")
+		q4s_node.hilo_rcv.join()
+		#actuator_thread.join() TODO cerrar bien el programa
+	print("\nYou can see q4s_client.log for viewing execution")
+
 
 	print("EXIT")
 	
