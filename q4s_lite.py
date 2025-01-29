@@ -12,6 +12,7 @@ import threading
 import time
 import sys,os
 import logging
+import functools
 
 #Paquete con tipo_mensaje,num secuencia, timestamp, latencia_up/down, jitter_up/down, packet_loss_up/down 
 #Tipos de mensaje: SYN, ACK, PING, RESP, DISC
@@ -71,6 +72,15 @@ client_handler = logging.FileHandler('q4s_client.log',mode='w')
 client_handler.setLevel(logging.DEBUG)
 client_handler.setFormatter(formatter)
 
+#Decoradores para deterioro de red
+def add_latency_decorator(func):
+    @functools.wraps(func)
+    def wrapper(self, *args, **kwargs):
+        if hasattr(self, 'latency_decoration'):
+            time.sleep(self.latency_decoration)  # Espera antes de ejecutar la función
+        return func(self, *args, **kwargs)
+    return wrapper
+
 class q4s_lite_node():
 
     def __init__(self, role, address, port, target_address, target_port, event=None):
@@ -109,6 +119,9 @@ class q4s_lite_node():
         self.lock = threading.Lock()
         #evento para mandar la señal al modulo de actuacion o publicacion
         self.event = event
+        #Deterioro de latencias y descarte de paquetes
+        self.latency_decoration = 1
+        self.packet_loss_decoration = 0
 
     def init_connection_server(self):
         #print("[INIT CONNECTION] SERVER: Waiting for connection")
@@ -275,6 +288,7 @@ class q4s_lite_node():
                     self.state="normal",time.time()
                     logger.debug(f"[RECOVERY]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
 
+    #@add_latency_decorator
     def measurement_receive_message(self):
         while self.measuring:
             #recibe mensaje bloqueante
@@ -318,14 +332,14 @@ class q4s_lite_node():
             except KeyboardInterrupt:
                 self.measuring=False
             except socket.timeout:
+                print("\nConection timeout")
                 self.measuring = False
                 self.running = False
-                print("\nConection timeout")
             except ConnectionResetError as e:
                 #Si el so cierra la conexion porque no esta levantado el otro extremo
                 #Tambien si se cae el otro extremo, esto ocurre cuando lo pruebo en local, en dos maquinas se podra gestionar bien TODO
                 #Esto ocurre en cuanto se corta la conexion
-                #print("hola ",e)
+                #TODO: Podria volver al init conection para esperar al otro extremo
                 print("\nConection error")
                 self.measuring = False
                 self.running = False
