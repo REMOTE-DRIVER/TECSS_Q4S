@@ -77,7 +77,7 @@ if __name__=="__main__":
 			elif option == '2':
 				q4s_node.latency_decoration=0
 			elif option == '3':
-				q4s_node.packet_loss_decoration+=0.5
+				q4s_node.packet_loss_decoration+=0.1
 
 	print("EXIT")
 	
