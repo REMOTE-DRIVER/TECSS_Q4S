@@ -16,6 +16,7 @@ actuator_host,actuator_port = "127.0.0.1",20003
 def send_command(command: str) -> str:
     """Envía un comando al dispositivo y recibe la respuesta mediante UDP."""
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+    	#s.bind((actuator_host,actuator_port))  # Por si hay que fijar un puerto local específico
         s.sendto(command.encode() + b"\0", (actuator_host, actuator_port))  # Añadir byte cero al final
         response, _ = s.recvfrom(1024)  # Recibir respuesta
     return response.decode().strip("\0")  # Quitar byte cero al final
