@@ -13,6 +13,7 @@ import time
 import sys,os
 import logging
 import functools
+import random
 
 #Paquete con tipo_mensaje,num secuencia, timestamp, latencia_up/down, jitter_up/down, packet_loss_up/down 
 #Tipos de mensaje: SYN, ACK, PING, RESP, DISC
@@ -26,9 +27,9 @@ ping_message ="PING".encode(MSG_FORMAT)
 resp_message = "RESP".encode(MSG_FORMAT)
 disc_message = "DISC".encode(MSG_FORMAT)
 
-PACKET_LOSS_PRECISSION = 1000 #Precision de los paquetes perdidos
+PACKET_LOSS_PRECISSION = 100 #Precision de los paquetes perdidos
 LATENCY_ALERT = 360 #milisegundos
-PACKET_LOSS_ALERT = 0.02 #2%
+PACKET_LOSS_ALERT = 0.1#0.02 #2%
 KEEP_ALERT_TIME = 1 #segundos que estas en estado de alerta a partir del cual vuelve a avisar al actuador, para no avisarle en todos los paquetes
 
 #Estrategias de combinacion de latencia
@@ -76,9 +77,10 @@ client_handler.setFormatter(formatter)
 def add_latency_decorator(func):
     @functools.wraps(func)
     def wrapper(self, *args, **kwargs):
-        if hasattr(self, 'latency_decoration'):
-            time.sleep(self.latency_decoration)  # Espera antes de ejecutar la función
-        return func(self, *args, **kwargs)
+        while self.measuring:
+            func(self, *args, **kwargs)  # Ejecuta la función original
+            if hasattr(self, 'latency_decoration'):
+                time.sleep(self.latency_decoration)  # Pausa en cada iteración
     return wrapper
 
 class q4s_lite_node():
@@ -120,7 +122,7 @@ class q4s_lite_node():
         #evento para mandar la señal al modulo de actuacion o publicacion
         self.event = event
         #Deterioro de latencias y descarte de paquetes
-        self.latency_decoration = 1
+        self.latency_decoration = 0
         self.packet_loss_decoration = 0
 
     def init_connection_server(self):
@@ -214,8 +216,14 @@ class q4s_lite_node():
                 self.packet_loss_down
                 )
             packet = struct.pack(PACKET_FORMAT, *packet_data)
-            try:                
-                self.socket.sendto(packet, self.target_address)
+            try:
+                #perdida de paquetes simulada
+                if self.packet_loss_decoration==0:
+                    self.socket.sendto(packet, self.target_address)
+                elif self.packet_loss_decoration>0:
+                    if random.random()>self.packet_loss_decoration:
+                        self.socket.sendto(packet, self.target_address)
+                #self.socket.sendto(packet, self.target_address)
                 logger.debug(f"[MEASURING SEND PING] n_seq:{packet_data[1]}: lat_up:{packet_data[3]} lat_down:{packet_data[4]} jit_up:{packet_data[5]} jit_down:{packet_data[6]} pl_up:{packet_data[7]} pl_down:{packet_data[8]}")
                 with self.lock:
                     self.total_received-=self.packets_received[self.seq_number]
@@ -328,6 +336,8 @@ class q4s_lite_node():
                     #mejor llamar mucho y comprobarlo dentro, en caso de fallo llegan pocos recoveries y puedes perder tiempo
                     print(f"[MEASURING (combined)] Latency:{self.latency_combined:.10f} Packet_loss: {self.packet_loss_combined:.3f}", end="\r")
                     self.check_alert(self.latency_combined>LATENCY_ALERT,self.packet_loss_combined>PACKET_LOSS_ALERT)
+                    if self.latency_decoration > 0:
+                        time.sleep(self.latency_decoration)
 
             except KeyboardInterrupt:
                 self.measuring=False

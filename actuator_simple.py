@@ -31,7 +31,9 @@ if __name__=="__main__":
 	while True:
 			#time.sleep(0.1)
 			print("")
-			print("1: añade 10 milisegundos de latencia")
+			print("1: empeora latencia")
+			print("2: mejora latencia")
+			print("3: pierde un 10 por ciento de paquetes")
 			print("0: Salir")
 			option = input("\nElige una opcion\n")
 			if option == '0':#Mata el actuador y los hilos del cliente q4s
@@ -43,7 +45,11 @@ if __name__=="__main__":
 				q4s_node.hilo_rcv.join()
 				break
 			elif option == '1':
-				q4s_node.latency_decoration+=1
+				q4s_node.latency_decoration+=0.1
+			elif option == '2':
+				q4s_node.latency_decoration=0
+			elif option == '3':
+				q4s_node.packet_loss_decoration+=0.5
 	'''actuator_thread = threading.Thread(target=actuator,args=(q4s_node,),daemon=True)
 	actuator_thread.start()
 	#El actuador no tiene que funcionar igual con el while true, podria tener un join y parar cuando quieras en la funcion actuator
