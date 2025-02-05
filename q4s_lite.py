@@ -73,16 +73,6 @@ client_handler = logging.FileHandler('q4s_client.log',mode='w')
 client_handler.setLevel(logging.DEBUG)
 client_handler.setFormatter(formatter)
 
-#Decoradores para deterioro de red
-def add_latency_decorator(func):
-    @functools.wraps(func)
-    def wrapper(self, *args, **kwargs):
-        while self.measuring:
-            func(self, *args, **kwargs)  # Ejecuta la función original
-            if hasattr(self, 'latency_decoration'):
-                time.sleep(self.latency_decoration)  # Pausa en cada iteración
-    return wrapper
-
 class q4s_lite_node():
 
     def __init__(self, role, address, port, target_address, target_port, event=None):
@@ -296,7 +286,6 @@ class q4s_lite_node():
                     self.state="normal",time.time()
                     logger.debug(f"[RECOVERY]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
 
-    #@add_latency_decorator
     def measurement_receive_message(self):
         while self.measuring:
             #recibe mensaje bloqueante
@@ -342,9 +331,11 @@ class q4s_lite_node():
             except KeyboardInterrupt:
                 self.measuring=False
             except socket.timeout:
-                print("\nConection timeout")
                 self.measuring = False
                 self.running = False
+                if self.event != None:
+                    self.event.set()
+                print("\nConection timeout")
             except ConnectionResetError as e:
                 #Si el so cierra la conexion porque no esta levantado el otro extremo
                 #Tambien si se cae el otro extremo, esto ocurre cuando lo pruebo en local, en dos maquinas se podra gestionar bien TODO
