@@ -1,6 +1,7 @@
 import threading
 import time
 import q4s_lite
+import logging
 
 #Parametros q4s
 event = threading.Event()
@@ -12,6 +13,14 @@ client_address, client_port = "127.0.0.1",20002
 #Parametros del actuador
 actuator_alive = False
 actuator_host,actuator_port = "127.0.0.1",8889
+
+#logging
+logger = logging.getLogger('q4s_logger')
+logger.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s - %(message)s')
+client_handler = logging.FileHandler('q4s_client.log',mode='w')
+client_handler.setLevel(logging.DEBUG)
+client_handler.setFormatter(formatter)
 
 def send_command(command: str) -> str:
     """Envía un comando al dispositivo y recibe la respuesta mediante TCP."""
@@ -50,7 +59,7 @@ def actuator(q4s_node):
 
 
 if __name__=="__main__":
-	#global actuator_alive
+	logger.addHandler(client_handler)
 	#El actuador es el cliente por defecto, ya que va en el coche
 	q4s_node = q4s_lite.q4s_lite_node("client",client_address, client_port, server_address, server_port,event)
 	q4s_node.run()
