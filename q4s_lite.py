@@ -350,9 +350,12 @@ class q4s_lite_node():
                 #Tambien si se cae el otro extremo, esto ocurre cuando lo pruebo en local, en dos maquinas se podra gestionar bien TODO
                 #Esto ocurre en cuanto se corta la conexion
                 #TODO: Podria volver al init conection para esperar al otro extremo
-                print("\nConection error")
                 self.measuring = False
                 self.running = False
+                if self.event != None:
+                    self.event.set()
+                print("\nConection error")
+                
                 #continue
             except Exception as error:
                 #pass

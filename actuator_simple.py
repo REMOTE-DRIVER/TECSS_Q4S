@@ -1,7 +1,7 @@
 import threading
 import time
 import q4s_lite
-import logging
+import logging,sys
 
 #Parametros q4s
 event = threading.Event()
@@ -49,16 +49,22 @@ def set_noise_resist(enable: bool) -> str:
 
 
 def actuator(q4s_node):
-	#while q4s_node.running:
+	global actuator_alive
 	while actuator_alive:
 		q4s_node.event.wait()
 		q4s_node.event.clear()
-		print(f"Me ha llegado una alerta {q4s_node.latency_combined}\n")#Faltan packetloss y jitter
+		#Alerta de perdida de conexion o de latencia/packet loss
+		if q4s_node.running==False:
+			print("Alerta por perdida de conexion")
+			actuator_alive = False
+		else:
+			print(f"Me ha llegado una alerta {q4s_node.latency_combined}\n")#Faltan packetloss y jitter
 		#peticion a lhe
-	print("\nFinished actuation\n")
+	print("\nFinished actuation you must relaunch the program\nPress 0 to exit\n")
+				
 
-
-if __name__=="__main__":
+def main():
+	global actuator_alive
 	logger.addHandler(client_handler)
 	#El actuador es el cliente por defecto, ya que va en el coche
 	q4s_node = q4s_lite.q4s_lite_node("client",client_address, client_port, server_address, server_port,event)
@@ -66,6 +72,8 @@ if __name__=="__main__":
 	actuator_alive = True
 	actuator_thread = threading.Thread(target=actuator,args=(q4s_node,),daemon=True)
 	actuator_thread.start()
+
+	#main_thread_alive = True
 	
 	while True:
 			#time.sleep(0.1)
@@ -73,6 +81,59 @@ if __name__=="__main__":
 			print("1: empeora latencia")
 			print("2: mejora latencia")
 			print("3: pierde un 10 por ciento de paquetes")
+			print("4: pierde un 10 por ciento de paquetes")
+			#print("5: restart actuator")
+			print("0: Salir")
+			option = input("\nElige una opcion\n")
+			if option == '0':#Mata el actuador y los hilos del cliente q4s
+				actuator_alive=False
+				#actuator_thread.join()
+				q4s_node.running=False
+				q4s_node.measuring=False
+				q4s_node.hilo_snd.join()
+				q4s_node.hilo_rcv.join()
+				break
+			elif option == '1':
+				q4s_node.latency_decoration+=0.1
+			elif option == '2':
+				q4s_node.latency_decoration=0
+			elif option == '3':
+				q4s_node.packet_loss_decoration+=0.1
+			elif option == '4':
+				q4s_node.packet_loss_decoration-=0.1
+			'''elif option == '5':#Opcion desactivada
+				actuator_alive=False
+				#actuator_thread.join()
+				q4s_node.running=False
+				q4s_node.measuring=False
+				q4s_node.hilo_snd.join()
+				q4s_node.hilo_rcv.join()
+				actuator_thread.join()
+				main()'''
+				
+
+	print("EXIT")
+
+if __name__=="__main__":
+	main()
+	'''logger.addHandler(client_handler)
+	#El actuador es el cliente por defecto, ya que va en el coche
+	q4s_node = q4s_lite.q4s_lite_node("client",client_address, client_port, server_address, server_port,event)
+	q4s_node.run()
+	actuator_alive = True
+	actuator_thread = threading.Thread(target=actuator,args=(q4s_node,),daemon=True)
+	actuator_thread.start()
+
+	#main_thread_alive = True
+	
+	while True:
+			#time.sleep(0.1)
+			print("")
+			print("1: empeora latencia")
+			print("2: mejora latencia")
+			print("3: pierde un 10 por ciento de paquetes")
+			print("4: pierde un 10 por ciento de paquetes")
+			print("5: restart actuator")
 			print("0: Salir")
 			option = input("\nElige una opcion\n")
 			if option == '0':#Mata el actuador y los hilos del cliente q4s
@@ -90,5 +151,5 @@ if __name__=="__main__":
 			elif option == '3':
 				q4s_node.packet_loss_decoration+=0.1
 
-	print("EXIT")
+	print("EXIT")'''
 	
