@@ -35,7 +35,7 @@ KEEP_ALERT_TIME = 1 #segundos que estas en estado de alerta a partir del cual vu
 #Estrategias de combinacion de latencia
 SMOOTHING_PARAM = 20#segun la estrategia, es el parametro n o alfa (numero de paquetes hasta latencia maxima, o factor de suavizado)
 TIME_TO_GET_LATENCY = 1#Segundos hasta llegar a la latencia real
-TIME_BETWEEN_PINGS = 1/SMOOTHING_PARAM*TIME_TO_GET_LATENCY
+TIME_BETWEEN_PINGS = 1/(SMOOTHING_PARAM*TIME_TO_GET_LATENCY)
 
 #Estrategias de combinacion de medidas, la media, la mayor, la menor,no hacer nada, etc...
 #x e y son las latencias de cada lado, z es el rol de quien invoca
