@@ -27,6 +27,8 @@ ping_message ="PING".encode(MSG_FORMAT)
 resp_message = "RESP".encode(MSG_FORMAT)
 disc_message = "DISC".encode(MSG_FORMAT)
 
+NEGOTIATION_TIME = 5
+
 PACKET_LOSS_PRECISSION = 100 #Precision de los paquetes perdidos
 LATENCY_ALERT = 360 #milisegundos
 PACKET_LOSS_ALERT = 0.1#0.02 #2%
@@ -86,6 +88,12 @@ class q4s_lite_node():
         self.target_address = (target_address, target_port)
         #execution check
         self.running=False
+        #measurement stage params
+        self.negotiation_rcv=None
+        self.negotiation_snd=None
+        self.negotiating=False
+        self.negotiation_latency_alert = 0
+        self.negotiation_packet_loss_alert = 0
         #measurement stage params
         self.hilo_rcv=None
         self.hilo_snd=None
@@ -179,6 +187,110 @@ class q4s_lite_node():
         else:
             logger.info("[INIT CONNECTION] CLIENT: Error, no se puede conectar al servidor")
             return -1
+
+    def negotiation_send(self): #simplificar para la negociacion
+        while self.negotiating:
+            #Se prepara el paquete
+            packet_data=(
+                ping_message,
+                self.seq_number,
+                time.time(),
+                self.latency_up,
+                self.latency_down,
+                self.jitter_up,
+                self.jitter_down,
+                self.packet_loss_up,
+                self.packet_loss_down
+                )
+            packet = struct.pack(PACKET_FORMAT, *packet_data)
+            try:
+                self.socket.sendto(packet, self.target_address)
+                #self.socket.sendto(packet, self.target_address)
+                logger.debug(f"[NEGOTIATING SEND PING] n_seq:{packet_data[1]}: lat_up:{packet_data[3]} lat_down:{packet_data[4]} jit_up:{packet_data[5]} jit_down:{packet_data[6]} pl_up:{packet_data[7]} pl_down:{packet_data[8]}")
+                with self.lock:
+                    self.total_received-=self.packets_received[self.seq_number]
+                    self.packets_received[self.seq_number] = 1
+                self.seq_number = (self.seq_number+1)%PACKET_LOSS_PRECISSION
+                #Packet loss strategy: Como mido por tandas, primero no mido, luego si, luego no, otra vez si... reseteo el total_received
+                if self.seq_number == 0:
+                    self.total_received = PACKET_LOSS_PRECISSION
+                time.sleep(TIME_BETWEEN_PINGS)#Esto es la cadencia de paquetes por segundo, configurable tambien
+                #responsividad es packetloss_precission/cadencia
+            except KeyboardInterrupt:
+                self.measuring=False
+            except Exception as e:
+                #Si el so cierra la conexion porque no esta levantado el otro extremo
+                #Tambien si se cae el otro extremo
+                print(f"[NEGOTIATING SEND PING]: ERROR in sending message {e}")
+                continue
+        return
+
+    def negotiation_receive(self):
+        while self.negotiating:
+            #recibe mensaje bloqueante
+            try:
+                data,addr = self.socket.recvfrom(PACKET_SIZE)
+                #timestamp_recepcion solo se usa para medir, es decir si el mensaje es tipo resp, aqui es mas preciso pero se puede mover para optimizar el proceso
+                timestamp_recepcion = time.time()
+                unpacked_data = struct.unpack(PACKET_FORMAT, data)
+                message_type = unpacked_data[0].decode(MSG_FORMAT).strip()  # El tipo de mensaje es el primer campo
+                if message_type == "PING": #PING
+                    self.update_measures(unpacked_data)
+                    logger.debug(f"[NEGOTIATING RECEIVE PING] n_seq:{unpacked_data[1]}: lat_up:{unpacked_data[3]} lat_down:{unpacked_data[4]} jit_up:{unpacked_data[5]} jit_down:{unpacked_data[6]} pl_up:{unpacked_data[7]} pl_down:{unpacked_data[8]}")
+                    packet_data = (resp_message,*unpacked_data[1:])#,unpacked_data[1],unpacked_data[2],unpacked_data[3],unpacked_data[4],unpacked_data[5],unpacked_data[6],unpacked_data[7],unpacked_data[8])
+                    packet = struct.pack(PACKET_FORMAT, *packet_data)
+                    self.socket.sendto(packet,self.target_address)
+                    logger.debug(f"[NEGOTIATING CONTEST RESP] n_seq:{packet_data[1]}: lat_up:{packet_data[3]} lat_down:{packet_data[4]} jit_up:{packet_data[5]} jit_down:{packet_data[6]} pl_up:{packet_data[7]} pl_down:{packet_data[8]}")
+                elif message_type == "RESP": #RESP
+                    #actualizo el packet received                    
+                    with self.lock:
+                        self.packets_received[unpacked_data[1]]=0
+                        #lo puedo poner a 1 para medir antes y no esperar tanto entre mediciones
+                        #self.total_received+=1 #self.packets_received[unpacked_data[1]]                    
+                    logger.debug(f"[NEGOTIATING RECEIVE RESP] n_seq:{unpacked_data[1]}: lat_up:{unpacked_data[3]} lat_down:{unpacked_data[4]} jit_up:{unpacked_data[5]} jit_down:{unpacked_data[6]} pl_up:{unpacked_data[7]} pl_down:{unpacked_data[8]}")
+                    
+                    if self.role=="server":
+                        self.latency_down,self.jitter_down,self.packet_loss_down = self.get_metrics(timestamp_recepcion,unpacked_data[2],self.latency_down,self.total_received)
+                        logger.debug(f"[NEGOTIATING (down)] Latency:{self.latency_down:.10f} Jitter: {self.jitter_down:.10f} Packet_loss: {self.packet_loss_down:.3f}")
+                    elif self.role=="client":
+                        self.latency_up,self.jitter_up,self.packet_loss_up = self.get_metrics(timestamp_recepcion,unpacked_data[2],self.latency_up,self.total_received)
+                        logger.debug(f"[NEGOTIATING (up)] Latency:{self.latency_up:.10f} Jitter: {self.jitter_up:.10f} Packet_loss: {self.packet_loss_up:.3f}")    
+                    
+                    #Combinacion de medidas
+                    self.latency_combined = COMBINED_FUNC(self.latency_up,self.latency_down,self.role)
+                    self.packet_loss_combined = COMBINED_FUNC(self.packet_loss_up,self.packet_loss_down,self.role)
+                    if self.latency_combined > LATENCY_ALERT:
+                        self.negotiation_latency_alert += 1
+                        print(f"[NEGOTIATING ALERT]: Latency alert {self.latency_combined}")
+                    if self.packet_loss_combined > PACKET_LOSS_ALERT:
+                        self.negotiation_packet_loss_alert += 1
+                        print(f"[NEGOTIATING ALERT]: Latency alert {self.packet_loss_combined}")
+                    
+
+            except KeyboardInterrupt:
+                self.negotiating=False
+            except socket.timeout:
+                self.negotiating = False
+                print("\nConection timeout during negotiation")
+            except ConnectionResetError as e:
+                #Si el so cierra la conexion porque no esta levantado el otro extremo
+                #Tambien si se cae el otro extremo, esto ocurre cuando lo pruebo en local, en dos maquinas se podra gestionar bien TODO
+                #Esto ocurre en cuanto se corta la conexion
+                #TODO: Podria volver al init conection para esperar al otro extremo
+                self.negotiating = False
+                print("\nConection error during negotiation")
+                
+                #continue
+            except Exception as error:
+                #pass
+                #print(f"Error recibiendo mensajes {error}")#suelen entrar timeouts, tratar en el futuro
+                #self.measuring = False
+                continue
+        #self.socket.close()
+        print("\n[NEGOTIATION] END")
+        return
+
+
 
     @staticmethod
     def get_metrics(reception_time,sent_time,last_latency,total_received):
@@ -370,6 +482,31 @@ class q4s_lite_node():
         else:
             init = -1
         if init == 0:
+            '''print(f"[NEGOTIATION PHASE] during {NEGOTIATION_TIME} seconds")
+            self.negotiation_rcv = threading.Thread(target=self.negotiation_receive, daemon=True, name="hilo_negotiation_rcv")
+            self.negotiation_snd = threading.Thread(target=self.negotiation_send, daemon=True, name="hilo_negotiation_snd")
+            self.negotiating = True
+            if self.role=="server":
+                self.negotiation_rcv.start()
+                self.negotiation_snd.start()
+            else:
+                self.negotiation_snd.start()
+                self.negotiation_rcv.start()
+            
+            time.sleep(NEGOTIATION_TIME)
+            self.negotiating = False
+            self.negotiation_rcv.join()
+            self.negotiation_snd.join()
+
+            if self.latency_combined > LATENCY_ALERT or self.packet_loss_combined > PACKET_LOSS_ALERT:
+                print(f"[NEGOTIATION PHASE] WARNING: Latency alerts during negotiation: {self.negotiation_latency_alert} Packet loss alerts during negotiation: {self.negotiation_packet_loss_alert}")
+                print(f"[NEGOTIATION PHASE] ERROR: The network parameters do not allow the minimum quality of service Latency: {self.latency_combined} Packet_loss: {self.packet_loss_combined}")
+
+            else:
+                if self.negotiation_latency_alert > 0 or self.negotiation_packet_loss_alert > 0:
+                    print(f"[NEGOTIATION PHASE] WARNING: Latency alerts during negotiation: {self.negotiation_latency_alert} Packet loss alerts during negotiation: {self.negotiation_packet_loss_alert}")
+                #Puedes continuar con la medicion'''
+                
             self.socket.settimeout(1)#un segundo antes de perdida de conex, mejor valor 360ms, podria ser una vble global, o a fuego por precaucion
             
             self.hilo_rcv = threading.Thread(target=self.measurement_receive_message, daemon=True, name="hilo_rcv")
