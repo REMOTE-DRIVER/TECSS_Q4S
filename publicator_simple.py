@@ -23,10 +23,8 @@ client_handler = logging.FileHandler('q4s_client.log',mode='w')
 client_handler.setLevel(logging.DEBUG)
 client_handler.setFormatter(formatter)
 
-
-
-LATENCY_ALERT = 360 #milisegundos
-PACKET_LOSS_ALERT = 0.1#0.02 #2%
+LATENCY_ALERT = q4s_lite.LATENCY_ALERT#360 #milisegundos
+PACKET_LOSS_ALERT = q4s_lite.PACKET_LOSS_ALERT#0.1#0.02 #2%
 
 def alert_publicator(q4s_node):
 	global publicator_alive

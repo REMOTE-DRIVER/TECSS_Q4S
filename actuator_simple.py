@@ -22,8 +22,9 @@ client_handler = logging.FileHandler('q4s_client.log',mode='w')
 client_handler.setLevel(logging.DEBUG)
 client_handler.setFormatter(formatter)
 
-LATENCY_ALERT = 360 #milisegundos
-PACKET_LOSS_ALERT = 0.1#0.02 #2%
+#mejor usar q4s_lite.LATENCY_ALERT
+LATENCY_ALERT = q4s_lite.LATENCY_ALERT#360 #milisegundos
+PACKET_LOSS_ALERT = q4s_lite.PACKET_LOSS_ALERT#0.1#0.02 #2%
 
 def send_command(command: str) -> str:
     """Envía un comando al dispositivo y recibe la respuesta mediante TCP."""
