@@ -13,13 +13,13 @@ client_address, client_port = "127.0.0.1",20002
 #Parametros del actuador
 publicator_alive = False
 mqtt_host,mqtt_port = "127.0.0.1",8889
-PUBLICATION_TIME = 3
+PUBLICATION_TIME = 3 #segundos
 
 #logging
 logger = logging.getLogger('q4s_logger')
 logger.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s - %(message)s')
-client_handler = logging.FileHandler('q4s_client.log',mode='w')
+client_handler = logging.FileHandler('q4s_server.log',mode='w')
 client_handler.setLevel(logging.DEBUG)
 client_handler.setFormatter(formatter)
 
@@ -59,8 +59,8 @@ def main():
 	q4s_node = q4s_lite.q4s_lite_node("server", server_address, server_port,client_address, client_port,event)
 	q4s_node.run()
 	publicator_alive = True
-	alert_publicator_thread = threading.Thread(target=alert_publicator,args=(q4s_node,),daemon=True)
-	alert_publicator_thread.start()
+	#alert_publicator_thread = threading.Thread(target=alert_publicator,args=(q4s_node,),daemon=True)
+	#alert_publicator_thread.start()
 	measures_publicator_thread = threading.Thread(target=measures_publicator,args=(q4s_node,),daemon=True)
 	measures_publicator_thread.start()
 
