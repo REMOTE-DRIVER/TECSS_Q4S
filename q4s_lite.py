@@ -31,7 +31,7 @@ NEGOTIATION_TIME = 5
 
 PACKET_LOSS_PRECISSION = 100 #Precision de los paquetes perdidos
 LATENCY_ALERT = 360 #milisegundos
-PACKET_LOSS_ALERT = 0.1#0.02 #2%
+PACKET_LOSS_ALERT = 0.2#0.02 #2%
 KEEP_ALERT_TIME = 1 #segundos que estas en estado de alerta a partir del cual vuelve a avisar al actuador, para no avisarle en todos los paquetes
 
 #Estrategias de combinacion de latencia
@@ -259,10 +259,10 @@ class q4s_lite_node():
                     #Combinacion de medidas
                     self.latency_combined = COMBINED_FUNC(self.latency_up,self.latency_down,self.role)
                     self.packet_loss_combined = COMBINED_FUNC(self.packet_loss_up,self.packet_loss_down,self.role)
-                    if self.latency_combined > LATENCY_ALERT:
+                    if self.latency_combined >= LATENCY_ALERT:
                         self.negotiation_latency_alert += 1
                         print(f"[NEGOTIATING ALERT]: Latency alert {self.latency_combined}")
-                    if self.packet_loss_combined > PACKET_LOSS_ALERT:
+                    if self.packet_loss_combined >= PACKET_LOSS_ALERT:
                         self.negotiation_packet_loss_alert += 1
                         print(f"[NEGOTIATING ALERT]: Latency alert {self.packet_loss_combined}")
                     
@@ -301,6 +301,9 @@ class q4s_lite_node():
         smothed_latency = last_latency + ((new_latency - last_latency) / SMOOTHING_PARAM)
         #loss
         loss=((PACKET_LOSS_PRECISSION-total_received)/PACKET_LOSS_PRECISSION)
+        #print(total_received, loss)
+        if loss < 0:
+            loss = 0
         return smothed_latency,jitter,loss
 
     def measurement_send_ping(self):
@@ -417,7 +420,8 @@ class q4s_lite_node():
                 elif message_type == "RESP": #RESP
                     #actualizo el packet received                    
                     with self.lock:
-                        self.packets_received[unpacked_data[1]]=0
+                        self.total_received += self.packets_received[unpacked_data[1]]
+                        #self.packets_received[unpacked_data[1]]=0
                         #lo puedo poner a 1 para medir antes y no esperar tanto entre mediciones
                         #self.total_received+=1 #self.packets_received[unpacked_data[1]]                    
                     logger.debug(f"[MEASURING RECEIVE RESP] n_seq:{unpacked_data[1]}: lat_up:{unpacked_data[3]} lat_down:{unpacked_data[4]} jit_up:{unpacked_data[5]} jit_down:{unpacked_data[6]} pl_up:{unpacked_data[7]} pl_down:{unpacked_data[8]}")
@@ -436,7 +440,8 @@ class q4s_lite_node():
                     #Posible TODO: Printar y comprobar alertas cada n paquetes, los necesarios para dar una alarma cada SMOOTHING_PARAM Paquetes
                     #mejor llamar mucho y comprobarlo dentro, en caso de fallo llegan pocos recoveries y puedes perder tiempo
                     print(f"[MEASURING (combined)] Latency:{self.latency_combined:.10f} Packet_loss: {self.packet_loss_combined:.3f}", end="\r")
-                    self.check_alert(self.latency_combined>LATENCY_ALERT,self.packet_loss_combined>PACKET_LOSS_ALERT)
+                    #print(f"[MEASURING (combined)] Latency:{self.latency_combined:.10f} Packet_loss: {self.packet_loss_combined}", end="\r")
+                    self.check_alert(self.latency_combined>=LATENCY_ALERT,self.packet_loss_combined>=PACKET_LOSS_ALERT)
                     if self.latency_decoration > 0:
                         time.sleep(self.latency_decoration)
 

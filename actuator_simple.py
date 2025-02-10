@@ -91,7 +91,7 @@ def main():
 			print("1: empeora latencia")
 			print("2: mejora latencia")
 			print("3: pierde un 10 por ciento de paquetes")
-			print("4: pierde un 10 por ciento de paquetes")
+			print("4: No pierdas paquetes")
 			#print("5: restart actuator")
 			print("0: Salir")
 			option = input("\nElige una opcion\n")
