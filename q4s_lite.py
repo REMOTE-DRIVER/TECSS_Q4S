@@ -35,10 +35,16 @@ PACKET_LOSS_ALERT = 0.05 #tanto por 1
 KEEP_ALERT_TIME = 1 #segundos que estas en estado de alerta a partir del cual vuelve a avisar al actuador, para no avisarle en todos los paquetes
 #deberia ser lo que tardas en que pase la ventana de packet_loss
 
-#Estrategias de combinacion de latencia
-SMOOTHING_PARAM = 20#segun la estrategia, es el parametro n o alfa (numero de paquetes hasta latencia maxima, o factor de suavizado)
-TIME_TO_GET_LATENCY = 1#Segundos hasta llegar a la latencia real
-TIME_BETWEEN_PINGS = 1/(SMOOTHING_PARAM*TIME_TO_GET_LATENCY)
+#Estrategias de combinacion de latencia_OLD
+#SMOOTHING_PARAM = 20#segun la estrategia, es el parametro n o alfa (numero de paquetes hasta latencia maxima, o factor de suavizado)
+#TIME_TO_GET_LATENCY = 1#Segundos hasta llegar a la latencia real
+#TIME_BETWEEN_PINGS = 1/(SMOOTHING_PARAM*TIME_TO_GET_LATENCY)
+
+#Nueva latencia
+LATENCY_CHECKPOINT = [3,5,7,9]# definen crecimiento y diferencia de latencia, jj recomienda de 3,4,5,6
+UP_INDEX = 0
+DOWN_INDEX = 0
+TIME_BETWEEN_PINGS = 1/30 #30 paquetes por segundo
 
 #Estrategias de combinacion de medidas, la media, la mayor, la menor,no hacer nada, etc...
 #x e y son las latencias de cada lado, z es el rol de quien invoca
@@ -295,17 +301,38 @@ class q4s_lite_node():
 
     @staticmethod
     def get_metrics(reception_time,sent_time,last_latency,total_received):
+        global UP_INDEX,DOWN_INDEX
         new_latency = ((reception_time-sent_time)*1000)/2 #rtt/2
         jitter = abs(new_latency-last_latency) #El valor absoluto
         #amortiguacion 
         #smoothed_latency = SMOOTHING_PARAM * new_latency + (1 - SMOOTHING_PARAM) * last_latency
-        smothed_latency = last_latency + ((new_latency - last_latency) / SMOOTHING_PARAM)
+        #smothed_latency = last_latency + ((new_latency - last_latency) / SMOOTHING_PARAM)
+        
+        #topes = [3,5,7,9]# definen crecimiento y diferencia de latencia, jj recomienda de 3,4,5,6
+        #UP_INDEX = 0
+        #indice_bajada = 0
+        if new_latency > last_latency + LATENCY_CHECKPOINT[UP_INDEX]:
+            smoothed_latency = last_latency + LATENCY_CHECKPOINT[UP_INDEX]
+            if UP_INDEX == len(LATENCY_CHECKPOINT)-1:
+                pass
+            else:
+                UP_INDEX +=1
+        elif new_latency < last_latency - LATENCY_CHECKPOINT[DOWN_INDEX]:
+            smoothed_latency = last_latency - LATENCY_CHECKPOINT[DOWN_INDEX]
+            if DOWN_INDEX == len(LATENCY_CHECKPOINT)-1:
+                pass
+            else:
+                DOWN_INDEX +=1
+        else:
+            smoothed_latency = new_latency
+
         #loss
         loss=((PACKET_LOSS_PRECISSION-total_received)/PACKET_LOSS_PRECISSION)
         #print(total_received, loss)
         if loss < 0:
             loss = 0
-        return smothed_latency,jitter,loss
+        #print(smothed_latency,jitter,loss)
+        return smoothed_latency,jitter,loss
 
     def measurement_send_ping(self):
         while self.measuring:
