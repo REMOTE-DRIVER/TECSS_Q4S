@@ -311,20 +311,25 @@ class q4s_lite_node():
         #topes = [3,5,7,9]# definen crecimiento y diferencia de latencia, jj recomienda de 3,4,5,6
         #UP_INDEX = 0
         #indice_bajada = 0
+        #New latency OJO a los resets de indices
         if new_latency > last_latency + LATENCY_CHECKPOINT[UP_INDEX]:
             smoothed_latency = last_latency + LATENCY_CHECKPOINT[UP_INDEX]
             if UP_INDEX == len(LATENCY_CHECKPOINT)-1:
                 pass
             else:
                 UP_INDEX +=1
+            DOWN_INDEX = 0
         elif new_latency < last_latency - LATENCY_CHECKPOINT[DOWN_INDEX]:
             smoothed_latency = last_latency - LATENCY_CHECKPOINT[DOWN_INDEX]
             if DOWN_INDEX == len(LATENCY_CHECKPOINT)-1:
                 pass
             else:
                 DOWN_INDEX +=1
+            UP_INDEX = 0
         else:
             smoothed_latency = new_latency
+            UP_INDEX = 0
+            DOWN_INDEX = 0
 
         #loss
         loss=((PACKET_LOSS_PRECISSION-total_received)/PACKET_LOSS_PRECISSION)
