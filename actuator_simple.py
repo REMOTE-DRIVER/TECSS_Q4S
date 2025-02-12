@@ -61,10 +61,14 @@ def actuator(q4s_node):
 		if q4s_node.running==False:
 			print("Alerta por perdida de conexion")
 			actuator_alive = False
+			#Si esta implementado el reset haces continue del bucle
+			#Ahora lo que haces es emitir un mensaje de que terminas
 		else:
 			#check alerts
+			#maquina estados, pides subidas y bajadas
+			
 			if q4s_node.latency_combined > LATENCY_ALERT and q4s_node.packet_loss_combined > PACKET_LOSS_ALERT:
-				print(f"Me ha llegado una alerta de latencia y packet loss\n")#Faltan packetloss y jitter
+				print(f"Me ha llegado una alerta de latencia y packet loss\n")
 			elif q4s_node.latency_combined > LATENCY_ALERT:
 				print("Me ha llegado una alerta por latencia")
 			elif q4s_node.packet_loss_combined > PACKET_LOSS_ALERT:

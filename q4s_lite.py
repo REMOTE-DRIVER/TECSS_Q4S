@@ -27,12 +27,13 @@ ping_message ="PING".encode(MSG_FORMAT)
 resp_message = "RESP".encode(MSG_FORMAT)
 disc_message = "DISC".encode(MSG_FORMAT)
 
-NEGOTIATION_TIME = 5
+NEGOTIATION_TIME = 5 #Dependera de lo que tarde en limpiarse una ventana de packet loss
 
 PACKET_LOSS_PRECISSION = 100 #Precision de los paquetes perdidos
-LATENCY_ALERT = 360 #milisegundos
-PACKET_LOSS_ALERT = 0.2#0.02 #2%
+LATENCY_ALERT = 295 #milisegundos
+PACKET_LOSS_ALERT = 0.05 #tanto por 1
 KEEP_ALERT_TIME = 1 #segundos que estas en estado de alerta a partir del cual vuelve a avisar al actuador, para no avisarle en todos los paquetes
+#deberia ser lo que tardas en que pase la ventana de packet_loss
 
 #Estrategias de combinacion de latencia
 SMOOTHING_PARAM = 20#segun la estrategia, es el parametro n o alfa (numero de paquetes hasta latencia maxima, o factor de suavizado)
