@@ -87,7 +87,7 @@ def state_machine(q4s_node):
 
 
 
-def actuator(q4s_node):
+def actuator_old(q4s_node):
     global actuator_alive
     
     while actuator_alive:
@@ -108,6 +108,41 @@ def actuator(q4s_node):
         #peticion a lhe
     print("\nFinished actuation you must relaunch the program\nPress 0 to exit\n")
                 
+def actuator(q4s_node):
+    global actuator_alive
+    global state
+    slot = 250000 #bits por segundo
+    state = 0
+    consecutive_events = 0
+    prev_packet_loss = None
+    tiempo_espera = q4s_lite.KEEP_ALERT_TIME
+    while actuator_alive:
+        if state == 0:
+            q4s_node.event.wait()
+            q4s_node.event.clear()
+            print(f"\n[ACTUATOR]{datetime.now().strftime("%H:%M:%S.%f")[:-3]} Me ha llegado una alerta por packet loss\n\tcliente: {q4s_node.packet_loss_up}\n\tserver: {q4s_node.packet_loss_down}\n\tcombinado: {q4s_node.packet_loss_combined}")
+            #Subir ancho de banda hasta que llegue al original, si es el original no hace nada
+            #Si esta en modo ruido lo quitamos
+            #Si llega alerta, vamos a estado 1
+            #Si falla cualquier peticion al coder, volvemos a estado 0
+            continue
+        elif state == 1:
+            #Se consulta ancho de banda y se pide que baje un slot
+            #te duermes esperando una alerta event_received = q4s_node.event.wait(timeout=TIME_X) se pone a True si llega evento
+            #si no llega la alerta, la cosa ha mejorado y te vas al estado 0
+            #Si llega alerta, vuelves al estado 1 (para bajar otro slot)
+            #Si llegan 3 alertas, te vas al estado 2
+            #Si falla cualquier peticion al coder, volvemos a estado 0
+            continue
+        elif state==2:
+            #Guardamos la perdida de paquetes con la que llegamos aqui
+            #Ponemos modo ruido
+            #esperamos
+            #Comprobamos perdida paquetes
+            #Si es peor bajamos un slot de ancho de banda y volvemos a estado 2
+            #si es mejor vamos a estado 0
+            continue
+
 
 def main():
     global actuator_alive
