@@ -87,7 +87,7 @@ client_handler.setFormatter(formatter)
 
 class q4s_lite_node():
 
-    def __init__(self, role, address, port, target_address, target_port, event=None):
+    def __init__(self, role, address, port, target_address, target_port, event=threading.Event()):
         #El rol importa para iniciar conex o medir up/down
         self.role = role 
         #udp socket params
@@ -423,16 +423,14 @@ class q4s_lite_node():
         if self.state[0]=="normal":
             if alert_latency or alert_packet_loss:
                 self.state="alert",time.perf_counter()
-                if self.event != None:
-                    self.event.set()
+                self.event.set()
                 logger.debug(f"[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
                 print(f"\n[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
         elif self.state[0]=="alert":
             if time.perf_counter()-self.state[1]>=KEEP_ALERT_TIME:#Solo comprueba si ha pasado x tiempo, esto se puede comprobar antes de invocar
                 if alert_latency or alert_packet_loss:
                     self.state="alert",time.perf_counter()
-                    if self.event != None:
-                        self.event.set()
+                    self.event.set()
                     logger.debug(f"[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
                     print(f"\n[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
                 else:
@@ -488,8 +486,8 @@ class q4s_lite_node():
             except socket.timeout:
                 self.measuring = False
                 self.running = False
-                if self.event != None:
-                    self.event.set()
+                #if self.event != None:
+                self.event.set()
                 print("\nConection timeout")
             except ConnectionResetError as e:
                 #Si el so cierra la conexion porque no esta levantado el otro extremo
@@ -498,8 +496,8 @@ class q4s_lite_node():
                 #TODO: Podria volver al init conection para esperar al otro extremo
                 self.measuring = False
                 self.running = False
-                if self.event != None:
-                    self.event.set()
+                #if self.event != None:
+                self.event.set()
                 print("\nConection error")
                 
                 #continue

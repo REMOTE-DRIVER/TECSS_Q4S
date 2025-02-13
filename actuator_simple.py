@@ -65,14 +65,7 @@ def actuator(q4s_node):
 			#Si esta implementado el reset haces continue del bucle
 			#Ahora lo que haces es emitir un mensaje de que terminas
 		else:
-			#check alerts
-			#maquina estados, pides subidas y bajadas
-			
-			if q4s_node.latency_combined >= LATENCY_ALERT and q4s_node.packet_loss_combined >= PACKET_LOSS_ALERT:
-				print(f"[ACTUATOR] Me ha llegado una alerta de latencia y packet loss\n")
-			elif q4s_node.latency_combined >= LATENCY_ALERT:
-				print("Me ha llegado una alerta por latencia")
-			elif q4s_node.packet_loss_combined >= PACKET_LOSS_ALERT:
+			if q4s_node.packet_loss_combined >= PACKET_LOSS_ALERT:
 				print(f"\n[ACTUATOR]{datetime.now().strftime("%H:%M:%S.%f")[:-3]} Me ha llegado una alerta por packet loss\n\tcliente: {q4s_node.packet_loss_up}\n\tserver: {q4s_node.packet_loss_down}\n\tcombinado: {q4s_node.packet_loss_combined}")
 		#peticion a lhe
 	print("\nFinished actuation you must relaunch the program\nPress 0 to exit\n")
