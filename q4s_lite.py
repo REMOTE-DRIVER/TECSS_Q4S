@@ -29,12 +29,15 @@ disc_message = "DISC".encode(MSG_FORMAT)
 
 NEGOTIATION_TIME = 5 #Dependera de lo que tarde en limpiarse una ventana de packet loss
 
+PACKETS_PER_SECOND = 30
+
+
 PACKET_LOSS_PRECISSION = 100 #Precision de los paquetes perdidos
 LATENCY_ALERT = 295 #milisegundos
 PACKET_LOSS_ALERT = 0.05 #tanto por 1
-KEEP_ALERT_TIME = 1 #segundos que estas en estado de alerta a partir del cual vuelve a avisar al actuador, para no avisarle en todos los paquetes
+KEEP_ALERT_TIME = (PACKET_LOSS_PRECISSION / PACKETS_PER_SECOND) #1 #segundos que estas en estado de alerta a partir del cual vuelve a avisar al actuador, para no avisarle en todos los paquetes
 #deberia ser lo que tardas en que pase la ventana de packet_loss
-
+print(f"KEEP_ALERT_TIME={KEEP_ALERT_TIME}")
 #Estrategias de combinacion de latencia_OLD
 #SMOOTHING_PARAM = 20#segun la estrategia, es el parametro n o alfa (numero de paquetes hasta latencia maxima, o factor de suavizado)
 #TIME_TO_GET_LATENCY = 1#Segundos hasta llegar a la latencia real
@@ -44,7 +47,7 @@ KEEP_ALERT_TIME = 1 #segundos que estas en estado de alerta a partir del cual vu
 LATENCY_CHECKPOINT = [3,5,7,9]# definen crecimiento y diferencia de latencia, jj recomienda de 3,4,5,6
 UP_INDEX = 0
 DOWN_INDEX = 0
-TIME_BETWEEN_PINGS = 1/30 #30 paquetes por segundo
+TIME_BETWEEN_PINGS = 1/PACKETS_PER_SECOND #30 paquetes por segundo
 
 #Estrategias de combinacion de medidas, la media, la mayor, la menor,no hacer nada, etc...
 #x e y son las latencias de cada lado, z es el rol de quien invoca
@@ -369,7 +372,9 @@ class q4s_lite_node():
                 self.seq_number = (self.seq_number+1)%PACKET_LOSS_PRECISSION
                 #Packet loss strategy: Como mido por tandas, primero no mido, luego si, luego no, otra vez si... reseteo el total_received
                 if self.seq_number == 0:
+                    #print(f"\nSe han enviado 100 paquetes y se resetea total received que ahora vale {self.total_received}\n")
                     self.total_received = PACKET_LOSS_PRECISSION
+
                 time.sleep(TIME_BETWEEN_PINGS)#Esto es la cadencia de paquetes por segundo, configurable tambien
                 #responsividad es packetloss_precission/cadencia
             except KeyboardInterrupt:
@@ -417,21 +422,21 @@ class q4s_lite_node():
         logger.debug(f"ESTADO: {self.state}")
         if self.state[0]=="normal":
             if alert_latency or alert_packet_loss:
-                self.state="alert",time.time()
+                self.state="alert",time.perf_counter()
                 if self.event != None:
                     self.event.set()
                 logger.debug(f"[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
                 print(f"\n[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
         elif self.state[0]=="alert":
-            if time.time()-self.state[1]>=KEEP_ALERT_TIME:#Solo comprueba si ha pasado x tiempo, esto se puede comprobar antes de invocar
+            if time.perf_counter()-self.state[1]>=KEEP_ALERT_TIME:#Solo comprueba si ha pasado x tiempo, esto se puede comprobar antes de invocar
                 if alert_latency or alert_packet_loss:
-                    self.state="alert",time.time()
+                    self.state="alert",time.perf_counter()
                     if self.event != None:
                         self.event.set()
                     logger.debug(f"[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
                     print(f"\n[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
                 else:
-                    self.state="normal",time.time()
+                    self.state="normal",time.perf_counter()
                     logger.debug(f"[RECOVERY]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
 
     def measurement_receive_message(self):
@@ -550,7 +555,7 @@ class q4s_lite_node():
             self.hilo_rcv = threading.Thread(target=self.measurement_receive_message, daemon=True, name="hilo_rcv")
             self.hilo_snd = threading.Thread(target=self.measurement_send_ping, daemon=True, name="hilo_snd")
             
-            self.state=("normal",None)
+            self.state=("normal",time.time())
             self.measuring = True
             if self.role=="server":
                 self.hilo_rcv.start()

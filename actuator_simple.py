@@ -2,7 +2,7 @@ import threading
 import time
 import q4s_lite
 import logging,sys
-
+from datetime import datetime
 #Parametros q4s
 event = threading.Event()
 server_address, server_port = "127.0.0.1",20001
@@ -57,6 +57,7 @@ def actuator(q4s_node):
 	while actuator_alive:
 		q4s_node.event.wait()
 		q4s_node.event.clear()
+		print(f"[ACTUATOR] Me despiertan con packet loss: {q4s_node.packet_loss_combined}")
 		#Alerta de perdida de conexion o de latencia/packet loss
 		if q4s_node.running==False:
 			print("Alerta por perdida de conexion")
@@ -67,12 +68,12 @@ def actuator(q4s_node):
 			#check alerts
 			#maquina estados, pides subidas y bajadas
 			
-			if q4s_node.latency_combined > LATENCY_ALERT and q4s_node.packet_loss_combined > PACKET_LOSS_ALERT:
-				print(f"Me ha llegado una alerta de latencia y packet loss\n")
-			elif q4s_node.latency_combined > LATENCY_ALERT:
+			if q4s_node.latency_combined >= LATENCY_ALERT and q4s_node.packet_loss_combined >= PACKET_LOSS_ALERT:
+				print(f"[ACTUATOR] Me ha llegado una alerta de latencia y packet loss\n")
+			elif q4s_node.latency_combined >= LATENCY_ALERT:
 				print("Me ha llegado una alerta por latencia")
-			elif q4s_node.packet_loss_combined > PACKET_LOSS_ALERT:
-				print("Me ha llegado una alerta por packet loss")
+			elif q4s_node.packet_loss_combined >= PACKET_LOSS_ALERT:
+				print(f"\n[ACTUATOR]{datetime.now().strftime("%H:%M:%S.%f")[:-3]} Me ha llegado una alerta por packet loss\n\tcliente: {q4s_node.packet_loss_up}\n\tserver: {q4s_node.packet_loss_down}\n\tcombinado: {q4s_node.packet_loss_combined}")
 		#peticion a lhe
 	print("\nFinished actuation you must relaunch the program\nPress 0 to exit\n")
 				
