@@ -110,7 +110,7 @@ def actuator_old(q4s_node):
                 
 def actuator(q4s_node):
     global actuator_alive
-    global state
+    global state #No hace falta que sea global
     slot = 250000 #bits por segundo
     state = 0
     consecutive_events = 0
