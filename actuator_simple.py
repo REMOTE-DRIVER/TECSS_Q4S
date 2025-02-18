@@ -151,7 +151,7 @@ def actuator(q4s_node):
 
     #si el orig bandwith no es por configuracion hacemos peticion aqui
     coder_orig_bandwith = ORIG_BANDWITH #el segundo parametro de get_bandwith, originalmente es por configuración
-    actuator_bandwith = coder_orig_bandwith #El badwith con el que trabaja el actuador, sobre este restamos slots, etc..
+    actuator_bandwith = coder_orig_bandwith #El bandwith con el que trabaja el actuador, sobre este restamos slots, etc..
     while actuator_alive:
         if state == 0:
             if actuator_latency_alert == False:#Ignorar alertas de latencia
