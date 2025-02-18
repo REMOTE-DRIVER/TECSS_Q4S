@@ -170,10 +170,10 @@ def actuator(q4s_node):
             q4s_node.event.clear()
             if check_alert_valid(q4s_node) == True:
                 print(f"\n[ACTUATOR]{datetime.now().strftime("%H:%M:%S.%f")[:-3]} Me ha llegado una alerta por packet loss\n\tcliente: {q4s_node.packet_loss_up}\n\tserver: {q4s_node.packet_loss_down}\n\tcombinado: {q4s_node.packet_loss_combined}")
-                #si no llega la alerta durante la espera
+                #si se consume el timeout sin que llegue una alerta
                 if alert_received_during_sleep == False:
-                    consecutive_alerts = 0 # Ha pasado un rato sin alertas, no se considera que sean seguidas
-                    state = 1 # OJO: Originalmente decia 0
+                    consecutive_alerts = 0 
+                    state = 0 
                     continue
                 #Si llega alerta, vuelves al estado 1 (para bajar otro slot)
                 else:
