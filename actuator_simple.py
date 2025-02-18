@@ -149,7 +149,7 @@ def actuator(q4s_node):
     prev_packet_loss = None
     tiempo_espera = 2*q4s_lite.KEEP_ALERT_TIME #TODO: Consensuar este tiempo con JJ, Sergio y Alberto
 
-    #si el orig bandwith no es por configuracion hacemos peticion aqui
+    #TODO:si el orig bandwith no es por configuracion hacemos peticion aqui
     coder_orig_bandwith = ORIG_BANDWITH #el segundo parametro de get_bandwith, originalmente es por configuración
     actuator_bandwith = coder_orig_bandwith #El bandwith con el que trabaja el actuador, sobre este restamos slots, etc..
     while actuator_alive:
@@ -163,8 +163,9 @@ def actuator(q4s_node):
                     continue
                 coder_actual_bandwith,coder_orig_bandwith = int(actual_and_orig_bandwith[0]), int(actual_and_orig_bandwith[1]) 
                 #Subir ancho de banda hasta que llegue al original(ORIG_BANDWITH), si es el original no hace nada
-                if actuator_bandwith < ORIG_BANDWITH:
+                if actuator_bandwith < ORIG_BANDWITH:#TODO: aqui va el margen de comparacion de un slot. -slot/fuentes
                     #subirlo hasta llegar a orig_bandwith
+                    #TODO: Subir por slots
                     if coder_actual_bandwith == coder_orig_bandwith:
                         bandwith_parameter = ORIG_BANDWITH
                     else: #Hay congestion en el coder y no podemos subir a tope, subimos a lo que puede el coder
@@ -266,8 +267,8 @@ def actuator(q4s_node):
             new_packet_loss = q4s_node.packet_loss_combined
 
             #Paso 3: Si es peor bajamos un slot de ancho de banda y volvemos a estado 2
-            if new_packet_loss > state2_packet_loss:
-                #bajar slot
+            if new_packet_loss > state2_packet_loss: #con cierto margen
+                #subir ancho de banda un slot
                 #Se consulta ancho de banda 
                 try:
                     coder_actual_and_orig_bandwith = get_target_bw_orig().split[";"]
@@ -293,9 +294,13 @@ def actuator(q4s_node):
                 #seguir en estado 2
                 state = 2
                 continue
+            else:#las perdidas se mantienen o bajan
+                #TODO: subo slot porque el culpable es el ruido no la congestion de red
+                state = 2
+                continue
 
             #Paso 4: Si es mejor vamos a estado 0
-            else:
+            if new_packet_loss == 0: #Con margen menor del 1 porciento
                 state = 0
                 continue
 
