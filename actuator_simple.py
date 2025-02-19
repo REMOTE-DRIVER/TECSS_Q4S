@@ -243,7 +243,6 @@ def actuator(q4s_node):
                     else:
                         actuator_bandwidth = coder_actual_bandwidth - slot
             else:
-                #TODO comprobar aqui el packet loss
                 actuator_latency_alert = False  
             
             #Paso 1: te duermes esperando una alerta 
@@ -285,7 +284,8 @@ def actuator(q4s_node):
             new_packet_loss = q4s_node.packet_loss_combined
 
             #Paso 3: Si es peor bajamos un slot de ancho de banda y volvemos a estado 2
-            if new_packet_loss > state2_packet_loss: #TODO:con cierto margen
+            if new_packet_loss > state2_packet_loss and (new_packet_loss-state2_packet_los) > 0.01: #TODO: Consensuar con Nokia el valor 
+            #if new_packet_loss > state2_packet_loss and new_packet_loss > state2_packet_loss * (1 + 0.01): #diferencia relativa
                 #Se consulta ancho de banda 
                 try:
                     coder_actual_and_orig_bandwidth = get_target_bw_orig().split[";"]
@@ -335,7 +335,7 @@ def actuator(q4s_node):
                 continue
 
             #Paso 4: Si es mejor vamos a estado 0
-            if new_packet_loss == 0: #TODO:Con margen menor del 1 porciento quizas subir que se compruebe lo primero
+            if new_packet_loss <= 0.01: #Si es menor de un 2 por ciento se pasa a estado 0 TODO: Consensuar valor
                 state = 0
                 continue
 
