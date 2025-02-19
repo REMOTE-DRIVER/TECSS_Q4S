@@ -140,7 +140,6 @@ def actuator(q4s_node):
     actuator_latency_alert: Booleano para ignorar alertas por latencia
     '''
     global actuator_alive
-    global state #No hace falta que sea global
 
     actuator_noise_mode = False
     actuator_latency_alert = False
@@ -149,7 +148,6 @@ def actuator(q4s_node):
     prev_packet_loss = None
     tiempo_espera = 2*q4s_lite.KEEP_ALERT_TIME #TODO: Consensuar este tiempo con JJ, Sergio y Alberto
 
-    #TODO:si el orig bandwith no es por configuracion hacemos peticion aqui
     #Peticion inicial de ancho de banda
     ORIG_BANDWIDTH = 0
     for i in range(3):
@@ -174,29 +172,36 @@ def actuator(q4s_node):
                     continue
                 coder_actual_bandwidth,coder_orig_bandwidth = int(coder_actual_and_orig_bandwidth[0]), int(coder_actual_and_orig_bandwidth[1]) 
                 #Subir ancho de banda hasta que llegue al original(ORIG_BANDWIDTH), si es el original no hace nada
-                if actuator_bandwidth < ORIG_BANDWIDTH:#TODO: aqui va el margen de comparacion de un slot. -slot/fuentes
-                    #subirlo hasta llegar a orig_bandwidth
-                    #TODO: Subir por slots
+                if actuator_bandwidth < ORIG_BANDWIDTH-(slot/FUENTES):
+                    #subirlo hasta llegar a orig_bandwidth                
                     if coder_actual_bandwidth == coder_orig_bandwidth:
-                        bandwith_parameter = ORIG_BANDWIDTH
+                        bandwith_parameter = actuator_bandwidth+slot
+                        if set_target_bw_orig(bandwith_parameter) != "OK":
+                            state = 0
+                            continue
+                        else:
+                            actuator_bandwidth = bandwith_parameter
+                            coder_orig_bandwidth = actuator_bandwidth 
                     else: #Hay congestion en el coder y no podemos subir a tope, subimos a lo que puede el coder
-                        bandwith_parameter = coder_actual_bandwidth
+                        if actuator_bandwidth < coder_actual_bandwidth-(slot/FUENTES)
+                            bandwith_parameter = coder_actual_bandwidth+slot
+                            if set_target_bw_orig(bandwith_parameter) != "OK":
+                                state = 0
+                                continue
+                            else:
+                                actuator_bandwidth = bandwith_parameter
+                                coder_orig_bandwidth = actuator_bandwidth                   
                     
-                    if set_target_bw_orig(bandwith_parameter) != "OK":
-                        state = 0
-                        continue
-                    else:
-                        actuator_bandwidth = bandwith_parameter
-                        coder_orig_bandwidth = actuator_bandwidth #OJO: comprobar que el set cambia el param orig, el segundo parametro del get
             else:
                 actuator_latency_alert = False
 
             #Paso 1: Si esta en modo ruido lo quitamos
             if actuator_noise_mode == True: #Si esta en modo ruido, lo quito
                 if set_noise_resist(False) != "OK"
-                    state = 0
-                    actuator_noise_mode = False
+                    state = 0                    
                     continue
+                else:
+                    actuator_noise_mode = False
             
             #Paso 2: Esperamos:si llega alerta, vamos a estado 1, si no llega nos quedamos en el estado 0
             alert_received_during_sleep = q4s_node.event.wait(timeout = tiempo_espera)
@@ -272,14 +277,15 @@ def actuator(q4s_node):
                 if set_noise_resist(True) != "OK"
                     state = 0
                     continue
+                else:
+                    actuator_noise_mode = True
             #esperamos
             time.sleep(tiempo_espera)
             #Paso 2: Comprobamos perdida paquetes
             new_packet_loss = q4s_node.packet_loss_combined
 
             #Paso 3: Si es peor bajamos un slot de ancho de banda y volvemos a estado 2
-            if new_packet_loss > state2_packet_loss: #con cierto margen
-                #subir ancho de banda un slot
+            if new_packet_loss > state2_packet_loss: #TODO:con cierto margen
                 #Se consulta ancho de banda 
                 try:
                     coder_actual_and_orig_bandwidth = get_target_bw_orig().split[";"]
@@ -306,12 +312,30 @@ def actuator(q4s_node):
                 state = 2
                 continue
             else:#las perdidas se mantienen o bajan
-                #TODO: subo slot porque el culpable es el ruido no la congestion de red
+                if actuator_bandwidth < ORIG_BANDWIDTH-(slot/FUENTES):
+                    #subirlo hasta llegar a orig_bandwidth                
+                    if coder_actual_bandwidth == coder_orig_bandwidth:
+                        bandwith_parameter = actuator_bandwidth+slot
+                        if set_target_bw_orig(bandwith_parameter) != "OK":
+                            state = 0
+                            continue
+                        else:
+                            actuator_bandwidth = bandwith_parameter
+                            coder_orig_bandwidth = actuator_bandwidth 
+                    else: #Hay congestion en el coder y no podemos subir a tope, subimos a lo que puede el coder
+                        if actuator_bandwidth < coder_actual_bandwidth-(slot/FUENTES)
+                            bandwith_parameter = coder_actual_bandwidth+slot
+                            if set_target_bw_orig(bandwith_parameter) != "OK":
+                                state = 0
+                                continue
+                            else:
+                                actuator_bandwidth = bandwith_parameter
+                                coder_orig_bandwidth = actuator_bandwidth
                 state = 2
                 continue
 
             #Paso 4: Si es mejor vamos a estado 0
-            if new_packet_loss == 0: #Con margen menor del 1 porciento
+            if new_packet_loss == 0: #TODO:Con margen menor del 1 porciento quizas subir que se compruebe lo primero
                 state = 0
                 continue
 
