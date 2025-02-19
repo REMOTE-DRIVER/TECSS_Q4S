@@ -379,6 +379,8 @@ class q4s_lite_node():
                 #responsividad es packetloss_precission/cadencia
             except KeyboardInterrupt:
                 self.measuring=False
+            except ConnectionResetError as e:
+                continue
             except Exception as e:
                 #Si el so cierra la conexion porque no esta levantado el otro extremo
                 #Tambien si se cae el otro extremo
