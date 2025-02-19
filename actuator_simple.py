@@ -125,7 +125,7 @@ def reduce_bandwith_slot(state,coder_actual_bandwidth,coder_orig_bandwidth,actua
 
 def actuator(q4s_node):
     '''Variables de medicion:
-    ORIG_BANDWITH: Por configuracion, el tope de bw que puede dar el coder, se usa en el estado 0, para intentar
+    ORIG_BANDWIDTH: Por configuracion, el tope de bw que puede dar el coder, se usa en el estado 0, para intentar
                     llegar a este tope
     
     coder_actual_bandwidth: El primer valor que devuelve el get_bw, sirve como tope de subida de bw cuando hay congestion
@@ -156,12 +156,12 @@ def actuator(q4s_node):
         try:
             ORIG_BANDWIDTH = get_target_bw_orig().split[";"][1]
         except Exception as e:
-            print("[ACTUATOR] Cant get target bandwidth from coder")
+            print(f"[ACTUATOR] Cant get target bandwidth from coder try [{i+1}/3]")
             continue
     if ORIG_BANDWIDTH == 0:
         print("[ACTUATOR] Error couldn't get target bandwith assigning 6Mbps")
         ORIG_BANDWIDTH = FUENTES * 6000000
-    coder_orig_bandwidth = ORIG_BANDWITH #el segundo parametro de get_bandwith, originalmente es por configuración
+    coder_orig_bandwidth = ORIG_BANDWIDTH #el segundo parametro de get_bandwith, originalmente es por configuración
     actuator_bandwidth = coder_orig_bandwidth #El bandwith con el que trabaja el actuador, sobre este restamos slots, etc..
     while actuator_alive:
         if state == 0:
@@ -173,12 +173,12 @@ def actuator(q4s_node):
                     state=0
                     continue
                 coder_actual_bandwidth,coder_orig_bandwidth = int(coder_actual_and_orig_bandwidth[0]), int(coder_actual_and_orig_bandwidth[1]) 
-                #Subir ancho de banda hasta que llegue al original(ORIG_BANDWITH), si es el original no hace nada
-                if actuator_bandwidth < ORIG_BANDWITH:#TODO: aqui va el margen de comparacion de un slot. -slot/fuentes
-                    #subirlo hasta llegar a orig_bandwith
+                #Subir ancho de banda hasta que llegue al original(ORIG_BANDWIDTH), si es el original no hace nada
+                if actuator_bandwidth < ORIG_BANDWIDTH:#TODO: aqui va el margen de comparacion de un slot. -slot/fuentes
+                    #subirlo hasta llegar a orig_bandwidth
                     #TODO: Subir por slots
                     if coder_actual_bandwidth == coder_orig_bandwidth:
-                        bandwith_parameter = ORIG_BANDWITH
+                        bandwith_parameter = ORIG_BANDWIDTH
                     else: #Hay congestion en el coder y no podemos subir a tope, subimos a lo que puede el coder
                         bandwith_parameter = coder_actual_bandwidth
                     
