@@ -3,6 +3,7 @@ import time
 import q4s_lite
 import logging,sys
 from datetime import datetime
+import socket
 #Parametros q4s
 event = threading.Event()
 server_address, server_port = "127.0.0.1",20001
@@ -27,7 +28,7 @@ LATENCY_ALERT = q4s_lite.LATENCY_ALERT#360 #milisegundos
 PACKET_LOSS_ALERT = q4s_lite.PACKET_LOSS_ALERT#0.1#0.02 #2%
 
 FUENTES = 3
-SLOT = FUENTES*250000
+slot = FUENTES*250000 #TODO en mayusculas
 #ORIG_BANDWIDTH = FUENTES * 6000000
 MAX_ALERTS_CONSECUTIVES = 3
 
@@ -95,34 +96,6 @@ def check_alert_valid(q4s_node):
             return True
     return False
 
-def reduce_bandwith_slot(state,coder_actual_bandwidth,coder_orig_bandwidth,actuator_bandwidth):
-
-    #Se consulta ancho de banda 
-    try:
-        coder_actual_bandwidth = int(get_target_bw_orig().split[";"][0])
-    except:
-        state = 0
-        continue
-    #y se pide que baje un slot
-    if coder_actual_bandwidth == coder_orig_bandwidth: #no hay congestion
-        actuator_bandwidth -= slot
-        if set_target_bw_orig(actuator_bandwidth) != "OK":
-            state = 0
-            actuator_bandwidth += slot
-            #se puede resetear actuator orig bandwith a coder_orig_bandwidth
-            continue
-        else:
-            coder_orig_bandwidth = actuator_bandwidth
-    else: #hay congestion coder_actual_bandwidth es mas pequeño que el orig                
-        if set_target_bw_orig(coder_actual_bandwidth - slot) != "OK":
-            state = 0
-            continue
-        else:
-            actuator_bandwidth = coder_actual_bandwidth - slot
-            coder_orig_bandwidth = actuator_bandwidth
-    return state,coder_actual_bandwidth,actuator_bandwidth
-
-
 def actuator(q4s_node):
     '''Variables de medicion:
     ORIG_BANDWIDTH: Por configuracion, el tope de bw que puede dar el coder, se usa en el estado 0, para intentar
@@ -150,15 +123,16 @@ def actuator(q4s_node):
 
     #Peticion inicial de ancho de banda
     ORIG_BANDWIDTH = 0
-    for i in range(3):
+    orig_bandwith_from_coder = False
+    try_number = 0
+    while not orig_bandwith_from_coder:
+        try_number+=1
         try:
             ORIG_BANDWIDTH = get_target_bw_orig().split[";"][1]
+            orig_bandwith_from_coder = True
         except Exception as e:
-            print(f"[ACTUATOR] Cant get target bandwidth from coder try [{i+1}/3]")
+            print(f"[ACTUATOR] Cant get target bandwidth from coder try number {try_number}")
             continue
-    if ORIG_BANDWIDTH == 0:
-        print("[ACTUATOR] Error couldn't get target bandwith assigning 6Mbps")
-        ORIG_BANDWIDTH = FUENTES * 6000000
     coder_orig_bandwidth = ORIG_BANDWIDTH #el segundo parametro de get_bandwith, originalmente es por configuración
     actuator_bandwidth = coder_orig_bandwidth #El bandwith con el que trabaja el actuador, sobre este restamos slots, etc..
     while actuator_alive:
@@ -183,7 +157,7 @@ def actuator(q4s_node):
                             actuator_bandwidth = bandwith_parameter
                             coder_orig_bandwidth = actuator_bandwidth 
                     else: #Hay congestion en el coder y no podemos subir a tope, subimos a lo que puede el coder
-                        if actuator_bandwidth < coder_actual_bandwidth-(slot/FUENTES)
+                        if actuator_bandwidth < coder_actual_bandwidth-(slot/FUENTES):
                             bandwith_parameter = coder_actual_bandwidth+slot
                             if set_target_bw_orig(bandwith_parameter) != "OK":
                                 state = 0
@@ -197,7 +171,7 @@ def actuator(q4s_node):
 
             #Paso 1: Si esta en modo ruido lo quitamos
             if actuator_noise_mode == True: #Si esta en modo ruido, lo quito
-                if set_noise_resist(False) != "OK"
+                if set_noise_resist(False) != "OK":
                     state = 0                    
                     continue
                 else:
@@ -273,7 +247,7 @@ def actuator(q4s_node):
             state2_packet_loss = q4s_node.packet_loss_combined
             #Paso 1: Ponemos modo ruido
             if actuator_noise_mode == False:
-                if set_noise_resist(True) != "OK"
+                if set_noise_resist(True) != "OK":
                     state = 0
                     continue
                 else:
@@ -323,7 +297,7 @@ def actuator(q4s_node):
                             actuator_bandwidth = bandwith_parameter
                             coder_orig_bandwidth = actuator_bandwidth 
                     else: #Hay congestion en el coder y no podemos subir a tope, subimos a lo que puede el coder
-                        if actuator_bandwidth < coder_actual_bandwidth-(slot/FUENTES)
+                        if actuator_bandwidth < coder_actual_bandwidth-(slot/FUENTES):
                             bandwith_parameter = coder_actual_bandwidth+slot
                             if set_target_bw_orig(bandwith_parameter) != "OK":
                                 state = 0
