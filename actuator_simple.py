@@ -323,47 +323,62 @@ def main():
     actuator_alive = True
     actuator_thread = threading.Thread(target=actuator,args=(q4s_node,),daemon=True)
     actuator_thread.start()
-
-    #main_thread_alive = True
     
     while True:
-            #time.sleep(0.1)
-            print("")
-            print("1: empeora latencia")
-            print("2: mejora latencia")
-            print("3: pierde un 10 por ciento de paquetes")
-            print("4: No pierdas paquetes")
-            #print("5: restart actuator")
-            print("0: Salir")
-            option = input("\nElige una opcion\n")
-            if option == '0':#Mata el actuador y los hilos del cliente q4s
-                actuator_alive=False
-                #actuator_thread.join()
-                q4s_node.running=False
-                q4s_node.measuring=False
-                q4s_node.hilo_snd.join()
-                q4s_node.hilo_rcv.join()
-                break
-            elif option == '1':
-                q4s_node.latency_decoration+=0.1
-            elif option == '2':
-                q4s_node.latency_decoration=0
-            elif option == '3':
-                q4s_node.packet_loss_decoration+=0.1
-            elif option == '4':
-                q4s_node.packet_loss_decoration=0
-            '''elif option == '5':#Opcion desactivada
-                actuator_alive=False
-                #actuator_thread.join()
-                q4s_node.running=False
-                q4s_node.measuring=False
-                q4s_node.hilo_snd.join()
-                q4s_node.hilo_rcv.join()
-                actuator_thread.join()
-                main()'''
+        print("\n1: Menu Pérdidas")
+        print("2: Menu Peticiones")
+        print("0: Salir")
+        option = input("\nElige una opción: ")
+
+        if option == '0':  # Mata el actuador y los hilos del cliente q4s
+            actuator_alive = False
+            q4s_node.running = False
+            q4s_node.measuring = False
+            q4s_node.hilo_snd.join()
+            q4s_node.hilo_rcv.join()
+            break
+
+        elif option == '1':  # Submenú de pérdidas
+            while True:
+                print("\n1: Empeora latencia")
+                print("2: Mejora latencia")
+                print("3: Pierde un 10 por ciento de paquetes")
+                print("4: No pierdas paquetes")
+                print("0: Atrás")
+                sub_option = input("Elige una opción: ")
+
+                if sub_option == '0':
+                    break
+                elif sub_option == '1':
+                    q4s_node.latency_decoration += 0.1
+                elif sub_option == '2':
+                    q4s_node.latency_decoration = 0
+                elif sub_option == '3':
+                    q4s_node.packet_loss_decoration += 0.1
+                elif sub_option == '4':
+                    q4s_node.packet_loss_decoration = 0
+
+        elif option == '2':  # Submenú de peticiones al coder
+            while True:
+                print("\n1: Petición GET_TARGET_BW_ORIG")
+                print("2: Petición SET_TARGET_BW_ORIG")
+                print("3: Petición SET_NOISE_RESIST")
+                print("0: Atrás")
+                sub_option = input("Introduce una opción: ")
                 
+                if sub_option == "1":
+                    print(send_command("GET_TARGET_BW_ORIG"))
+                elif sub_option == "2":
+                    value = int(input("Dime valor de ancho de banda objetivo: "))
+                    print(send_command(f"SET_TARGET_BW_ORIG:{value}"))
+                elif sub_option == "3":
+                    enable = int(input("Activar (1)/Desactivar (0) modo noise resist: "))
+                    print(send_command(f"SET_NOISE_RESIST:{enable}"))
+                elif sub_option == "0":
+                    break
 
     print("EXIT")
+
 
 if __name__=="__main__":
     main()
