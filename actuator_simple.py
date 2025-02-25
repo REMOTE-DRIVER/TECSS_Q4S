@@ -128,10 +128,13 @@ def actuator(q4s_node):
     while not orig_bandwith_from_coder:
         try_number+=1
         try:
-            ORIG_BANDWIDTH = get_target_bw_orig().split[";"][1]
+            ORIG_BANDWIDTH = get_target_bw_orig().split(";")[1]
+            ORIG_BANDWIDTH = int(ORIG_BANDWIDTH)
+            print(f"ORIG_BANDWIDTH {ORIG_BANDWIDTH}")
             orig_bandwith_from_coder = True
         except Exception as e:
-            print(f"[ACTUATOR] Cant get target bandwidth from coder try number {try_number}")
+            print(f"\n[ACTUATOR] Cant get target bandwidth from coder try number {try_number}\n")
+            time.sleep(1)
             continue
     coder_orig_bandwidth = ORIG_BANDWIDTH #el segundo parametro de get_bandwith, originalmente es por configuración
     actuator_bandwidth = coder_orig_bandwidth #El bandwith con el que trabaja el actuador, sobre este restamos slots, etc..
@@ -140,7 +143,7 @@ def actuator(q4s_node):
             if actuator_latency_alert == False:#Ignorar alertas de latencia
                 #Paso 0: pido ancho de banda y intento subir al original
                 try:
-                    coder_actual_and_orig_bandwidth = get_target_bw_orig().split[";"]
+                    coder_actual_and_orig_bandwidth = get_target_bw_orig().split(";")
                 except:
                     state=0
                     continue
@@ -197,7 +200,7 @@ def actuator(q4s_node):
             if actuator_latency_alert == False:#Ignorar alertas de latencia
                 #Paso 0: Bajar un slot 
                 try:
-                    coder_actual_and_orig_bandwidth = get_target_bw_orig().split[";"]
+                    coder_actual_and_orig_bandwidth = get_target_bw_orig().split(";")
                 except:
                     state=0
                     continue
@@ -262,7 +265,7 @@ def actuator(q4s_node):
             #if new_packet_loss > state2_packet_loss and new_packet_loss > state2_packet_loss * (1 + 0.01): #diferencia relativa
                 #Se consulta ancho de banda 
                 try:
-                    coder_actual_and_orig_bandwidth = get_target_bw_orig().split[";"]
+                    coder_actual_and_orig_bandwidth = get_target_bw_orig().split(";")
                 except:
                     state=0
                     continue
