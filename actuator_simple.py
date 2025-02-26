@@ -27,7 +27,7 @@ client_handler.setFormatter(formatter)
 LATENCY_ALERT = q4s_lite.LATENCY_ALERT#360 #milisegundos
 PACKET_LOSS_ALERT = q4s_lite.PACKET_LOSS_ALERT#0.1#0.02 #2%
 
-FUENTES = 3
+FUENTES = 1
 slot = FUENTES*250000 #TODO en mayusculas
 #ORIG_BANDWIDTH = FUENTES * 6000000
 MAX_ALERTS_CONSECUTIVES = 3

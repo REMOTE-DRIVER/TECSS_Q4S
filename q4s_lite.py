@@ -583,10 +583,24 @@ if __name__=="__main__":
             q4s_node.run()
             try:
                 while q4s_node.running:#Aqui se puede poner menu de control con simulacion de perdidas etc...
-                    time.sleep(0.1)
-                    '''option = input("\npulsa 0 para salir\n")
-                    if option == '0':
-                        main_run=False'''
+                    #time.sleep(0.1)
+                    print("\n1: Empeora latencia")
+                    print("2: Mejora latencia")
+                    print("3: Pierde un 10 por ciento mas de paquetes")
+                    print("4: No pierdas paquetes")
+                    print("0: Atrás")
+                    sub_option = input("Elige una opción: ")
+
+                    if sub_option == '0':
+                        break
+                    elif sub_option == '1':
+                        q4s_node.latency_decoration += 0.1
+                    elif sub_option == '2':
+                        q4s_node.latency_decoration = 0
+                    elif sub_option == '3':
+                        q4s_node.packet_loss_decoration += 0.1
+                    elif sub_option == '4':
+                        q4s_node.packet_loss_decoration = 0
             except KeyboardInterrupt:
                 q4s_node.measuring=False
                 q4s_node.hilo_snd.join()
@@ -598,10 +612,23 @@ if __name__=="__main__":
             q4s_node.run()
             try:
                 while q4s_node.running:#Aqui se puede poner menu de control con simulacion de perdidas etc...
-                    time.sleep(0.1)
-                    '''option = input("\npulsa 0 para salir\n")
-                    if option == '0':
-                        main_run=False'''
+                    print("\n1: Empeora latencia")
+                    print("2: Mejora latencia")
+                    print("3: Pierde un 10 por ciento mas de paquetes")
+                    print("4: No pierdas paquetes")
+                    print("0: Atrás")
+                    sub_option = input("Elige una opción: ")
+
+                    if sub_option == '0':
+                        break
+                    elif sub_option == '1':
+                        q4s_node.latency_decoration += 0.1
+                    elif sub_option == '2':
+                        q4s_node.latency_decoration = 0
+                    elif sub_option == '3':
+                        q4s_node.packet_loss_decoration += 0.1
+                    elif sub_option == '4':
+                        q4s_node.packet_loss_decoration = 0
             except KeyboardInterrupt:
                 q4s_node.measuring=False
                 q4s_node.hilo_snd.join()
