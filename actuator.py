@@ -32,6 +32,9 @@ slot = FUENTES*250000 #TODO en mayusculas
 #ORIG_BANDWIDTH = FUENTES * 6000000
 MAX_ALERTS_CONSECUTIVES = 3
 
+#Test
+valores = None
+
 def send_command(command: str) -> str:
     """Envía un comando al dispositivo y recibe la respuesta mediante TCP."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -52,6 +55,7 @@ def set_target_bw_orig(value: int) -> str:
     '''Distribuye el nuevo target entre todas las fuentes activas
     sample response: "OK\0"'''
     return send_command(f"SET_TARGET_BW_ORIG:{value}")
+
 
 
 def set_noise_resist(enable: bool) -> str:
@@ -140,6 +144,7 @@ def actuator(q4s_node):
     actuator_bandwidth = coder_orig_bandwidth #El bandwith con el que trabaja el actuador, sobre este restamos slots, etc..
     while actuator_alive:
         if state == 0:
+            print(f"\n[ACTUATOR (0)]\n")
             if actuator_latency_alert == False:#Ignorar alertas de latencia
                 #Paso 0: pido ancho de banda y intento subir al original
                 try:
@@ -149,7 +154,9 @@ def actuator(q4s_node):
                     continue
                 coder_actual_bandwidth,coder_orig_bandwidth = int(coder_actual_and_orig_bandwidth[0]), int(coder_actual_and_orig_bandwidth[1]) 
                 #Subir ancho de banda hasta que llegue al original(ORIG_BANDWIDTH), si es el original no hace nada
-                if actuator_bandwidth < ORIG_BANDWIDTH-(slot/FUENTES):
+                print(f"\n    [ACTUATOR (0)] Actual bw:{coder_actual_bandwidth} Orig bw:{coder_orig_bandwidth}\n")
+                if actuator_bandwidth <= ORIG_BANDWIDTH-(slot/FUENTES):
+                    print("\n    [ACTUATOR (0)]: Estoy por debajo del ancho de banda, lo subo un slot\n")
                     #subirlo hasta llegar a orig_bandwidth                
                     if coder_actual_bandwidth == coder_orig_bandwidth:
                         bandwith_parameter = actuator_bandwidth+slot
@@ -174,6 +181,7 @@ def actuator(q4s_node):
 
             #Paso 1: Si esta en modo ruido lo quitamos
             if actuator_noise_mode == True: #Si esta en modo ruido, lo quito
+                print("\n    [ACTUATOR (0)]: Quito el modo ruido\n")
                 if set_noise_resist(False) != "OK":
                     state = 0                    
                     continue
@@ -183,10 +191,12 @@ def actuator(q4s_node):
             #Paso 2: Esperamos:si llega alerta, vamos a estado 1, si no llega nos quedamos en el estado 0
             alert_received_during_sleep = q4s_node.event.wait(timeout = tiempo_espera)
             if alert_received_during_sleep == False:
+                print("\n    [ACTUATOR (0)]: Sin alertas un tramo de paquetes todo bien\n")
                 state=0
                 continue
             else:
                 q4s_node.event.clear()
+                print("\n    [ACTUATOR (0)]: He recibido alerta, paso a estado 1\n")
                 if check_alert_valid(q4s_node) == True:
                     print(f"\n[ACTUATOR]{datetime.now().strftime("%H:%M:%S.%f")[:-3]} Me ha llegado una alerta por packet loss\n\tcliente: {q4s_node.packet_loss_up}\n\tserver: {q4s_node.packet_loss_down}\n\tcombinado: {q4s_node.packet_loss_combined}")
                     state = 1
@@ -197,6 +207,7 @@ def actuator(q4s_node):
                     continue
 
         elif state == 1:
+            print("\n[ACTUATOR (1)]\n")
             if actuator_latency_alert == False:#Ignorar alertas de latencia
                 #Paso 0: Bajar un slot 
                 try:
@@ -207,6 +218,7 @@ def actuator(q4s_node):
                 coder_actual_bandwidth,coder_orig_bandwidth = int(coder_actual_and_orig_bandwidth[0]), int(coder_actual_and_orig_bandwidth[1]) 
                 
                 if coder_actual_bandwidth == coder_orig_bandwidth: #no hay congestion
+                    print("\n    [ACTUATOR (1)]: Voy a bajar un slot\n")
                     actuator_bandwidth -= slot
                     if set_target_bw_orig(actuator_bandwidth) != "OK":
                         state = 0
@@ -225,11 +237,13 @@ def actuator(q4s_node):
             #Paso 1: te duermes esperando una alerta 
             alert_received_during_sleep = q4s_node.event.wait(timeout = tiempo_espera)
             if alert_received_during_sleep == False:
+                print("\n    [ACTUATOR (1)]: Sin alertas durante un tramo, vuelvo a estado 0\n")
                 consecutive_alerts = 0 
                 state = 0 
                 continue
             else:
                 if check_alert_valid(q4s_node) == True:
+                    print("\n    [ACTUATOR (1)]: Alerta durante el sueño, la trato\n")
                     print(f"\n[ACTUATOR]{datetime.now().strftime("%H:%M:%S.%f")[:-3]} Me ha llegado una alerta por packet loss\n\tcliente: {q4s_node.packet_loss_up}\n\tserver: {q4s_node.packet_loss_down}\n\tcombinado: {q4s_node.packet_loss_combined}")
                     consecutive_alerts+=1%(MAX_ALERTS_CONSECUTIVES)
                     #Paso 3: Si llegan 3 alertas, te vas al estado 2
@@ -239,6 +253,7 @@ def actuator(q4s_node):
                     else: #consecutive alerts = 3 que es 0 
                         consecutive_alerts = 0
                         state = 2
+                        print("\n    [ACTUATOR (1)]: 3 alertas consecutivas, paso al estado 2\n")
                         continue
                 else: #latency alert 
                     state = 1
@@ -246,10 +261,12 @@ def actuator(q4s_node):
                     continue
             
         elif state==2:
+            print("\n[ACTUATOR (2)]\n")
             #Paso 0: Guardamos la perdida de paquetes con la que llegamos aqui
             state2_packet_loss = q4s_node.packet_loss_combined
             #Paso 1: Ponemos modo ruido
             if actuator_noise_mode == False:
+                print("\n    [ACTUATOR (2)]: Pongo el modo ruido\n")
                 if set_noise_resist(True) != "OK":
                     state = 0
                     continue
@@ -263,7 +280,8 @@ def actuator(q4s_node):
             #Paso 3: Si es peor bajamos un slot de ancho de banda y volvemos a estado 2
             if new_packet_loss > state2_packet_loss and (new_packet_loss-state2_packet_los) > 0.01: #TODO: Consensuar con Nokia el valor 
             #if new_packet_loss > state2_packet_loss and new_packet_loss > state2_packet_loss * (1 + 0.01): #diferencia relativa
-                #Se consulta ancho de banda 
+                #Se consulta ancho de banda
+                print("\n    [ACTUATOR (2)]: He esperado y ha crecido la perdida, intento bajar ancho de banda\n") 
                 try:
                     coder_actual_and_orig_bandwidth = get_target_bw_orig().split(";")
                 except:
@@ -290,6 +308,7 @@ def actuator(q4s_node):
                 continue
             else:#las perdidas se mantienen o bajan
                 if actuator_bandwidth < ORIG_BANDWIDTH-(slot/FUENTES):
+                    print("\n    [ACTUATOR (2)]: He esperado y las perdidas se mantienen o bajan, subo el ancho de banda\n")
                     #subirlo hasta llegar a orig_bandwidth                
                     if coder_actual_bandwidth == coder_orig_bandwidth:
                         bandwith_parameter = actuator_bandwidth+slot
@@ -313,6 +332,7 @@ def actuator(q4s_node):
 
             #Paso 4: Si es mejor vamos a estado 0
             if new_packet_loss <= 0.01: #Si es menor de un 2 por ciento se pasa a estado 0 TODO: Consensuar valor
+                print("\n    [ACTUATOR (2)]: La perdida es insignificante, vuelvo a estado 0\n")
                 state = 0
                 continue
 
