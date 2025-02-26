@@ -348,7 +348,8 @@ class q4s_lite_node():
             packet_data=(
                 ping_message,
                 self.seq_number,
-                time.time(),
+                #time.time(),
+                time.perf_counter(),
                 self.latency_up,
                 self.latency_down,
                 self.jitter_up,
@@ -445,7 +446,8 @@ class q4s_lite_node():
             try:
                 data,addr = self.socket.recvfrom(PACKET_SIZE)
                 #timestamp_recepcion solo se usa para medir, es decir si el mensaje es tipo resp, aqui es mas preciso pero se puede mover para optimizar el proceso
-                timestamp_recepcion = time.time()
+                #timestamp_recepcion = time.time()
+                timestamp_recepcion = time.perf_counter()
                 unpacked_data = struct.unpack(PACKET_FORMAT, data)
                 message_type = unpacked_data[0].decode(MSG_FORMAT).strip()  # El tipo de mensaje es el primer campo
                 if message_type == "PING": #PING

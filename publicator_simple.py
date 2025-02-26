@@ -14,6 +14,7 @@ client_address, client_port = "127.0.0.1",20002
 publicator_alive = False
 mqtt_host,mqtt_port = "127.0.0.1",8889
 PUBLICATION_TIME = 3 #segundos
+PUBLICATION_ALERT_TIME = 1 #segundo
 
 #logging
 logger = logging.getLogger('q4s_logger')
@@ -29,7 +30,7 @@ PACKET_LOSS_ALERT = q4s_lite.PACKET_LOSS_ALERT#0.1#0.02 #2%
 def alert_publicator(q4s_node):
 	global publicator_alive
 	while publicator_alive:
-		q4s_node.event.wait()
+		'''q4s_node.event.wait()
 		q4s_node.event.clear()
 		#Alerta de perdida de conexion o de latencia/packet loss
 		if q4s_node.running==False:
@@ -43,13 +44,20 @@ def alert_publicator(q4s_node):
 				print("Me ha llegado una alerta por latencia")
 			elif q4s_node.packet_loss_combined > PACKET_LOSS_ALERT:
 				print("Me ha llegado una alerta por packet loss")
-		#peticion a lhe
+		#peticion a lhe'''
+		if q4s_node.latency_combined > LATENCY_ALERT and q4s_node.packet_loss_combined > PACKET_LOSS_ALERT:
+			print(f"[PUBLICATOR ALERTS]Me ha llegado una alerta de latencia y packet loss            \n")#Faltan packetloss y jitter
+		elif q4s_node.latency_combined > LATENCY_ALERT:
+			print("[PUBLICATOR ALERTS]Me ha llegado una alerta por latencia                     ")
+		elif q4s_node.packet_loss_combined > PACKET_LOSS_ALERT:
+			print("[PUBLICATOR ALERTS]Me ha llegado una alerta por packet loss                 ")
+		time.sleep(PUBLICATION_ALERT_TIME)
 	print("\nFinished alert publication you must relaunch the program\nPress 0 to exit\n")
 
 def measures_publicator(q4s_node):
 	global publicator_alive
 	while publicator_alive:
-		print(f"[PUBLICATOR] Measures Latency:{q4s_node.latency_combined:.10f} Packet_loss: {q4s_node.packet_loss_combined:.3f}")
+		print(f"[PUBLICATOR] Measures Latency:{q4s_node.latency_combined:.10f} Packet_loss: {q4s_node.packet_loss_combined:.3f}                       ")
 		time.sleep(PUBLICATION_TIME)				
 
 def main():
@@ -59,8 +67,8 @@ def main():
 	q4s_node = q4s_lite.q4s_lite_node("server", server_address, server_port,client_address, client_port,event)
 	q4s_node.run()
 	publicator_alive = True
-	#alert_publicator_thread = threading.Thread(target=alert_publicator,args=(q4s_node,),daemon=True)
-	#alert_publicator_thread.start()
+	alert_publicator_thread = threading.Thread(target=alert_publicator,args=(q4s_node,),daemon=True)
+	alert_publicator_thread.start()
 	measures_publicator_thread = threading.Thread(target=measures_publicator,args=(q4s_node,),daemon=True)
 	measures_publicator_thread.start()
 
@@ -72,7 +80,7 @@ def main():
 			print("1: empeora latencia")
 			print("2: mejora latencia")
 			print("3: pierde un 10 por ciento de paquetes")
-			print("4: pierde un 10 por ciento de paquetes")
+			print("4: deja de perder paquetes")
 			#print("5: restart publicator")
 			print("0: Salir")
 			option = input("\nElige una opcion\n")

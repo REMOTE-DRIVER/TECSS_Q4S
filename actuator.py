@@ -62,7 +62,7 @@ def set_noise_resist(enable: bool) -> str:
 
 
 
-def actuator(q4s_node):
+def actuator_old(q4s_node):
     global actuator_alive
     
     while actuator_alive:
@@ -96,7 +96,7 @@ def check_alert_valid(q4s_node):
             return True
     return False
 
-def actuator_new(q4s_node):
+def actuator(q4s_node):
     '''Variables de medicion:
     ORIG_BANDWIDTH: Por configuracion, el tope de bw que puede dar el coder, se usa en el estado 0, para intentar
                     llegar a este tope
