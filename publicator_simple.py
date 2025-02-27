@@ -98,6 +98,7 @@ def main():
 				q4s_node.latency_decoration=0
 			elif option == '3':
 				q4s_node.packet_loss_decoration+=0.1
+				print(f"Packet_loss_decoration =  {q4s_node.packet_loss_decoration}")
 			elif option == '4':
 				q4s_node.packet_loss_decoration=0
 			'''elif option == '5':#Opcion desactivada

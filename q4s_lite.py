@@ -34,7 +34,7 @@ PACKETS_PER_SECOND = 30
 
 PACKET_LOSS_PRECISSION = 100 #Precision de los paquetes perdidos
 LATENCY_ALERT = 295 #milisegundos
-PACKET_LOSS_ALERT = 0.05 #tanto por 1
+PACKET_LOSS_ALERT = 0.02 #tanto por 1
 KEEP_ALERT_TIME = (PACKET_LOSS_PRECISSION / PACKETS_PER_SECOND) #1 #segundos que estas en estado de alerta a partir del cual vuelve a avisar al actuador, para no avisarle en todos los paquetes
 #deberia ser lo que tardas en que pase la ventana de packet_loss
 print(f"KEEP_ALERT_TIME={KEEP_ALERT_TIME}")
@@ -121,7 +121,8 @@ class q4s_lite_node():
         self.jitter_combined = 0.0
         self.packet_loss_combined = 0.0
         #packet_loss control
-        self.packets_received = [0] * PACKET_LOSS_PRECISSION
+        self.first_packet = False
+        self.packets_received = [1] * PACKET_LOSS_PRECISSION
         self.total_received = PACKET_LOSS_PRECISSION
         #state
         self.state=None,None #Es una tupla de nombre estado, timestamp cuando se puso, ver si la alerta es larga
@@ -336,9 +337,10 @@ class q4s_lite_node():
 
         #loss
         loss=((PACKET_LOSS_PRECISSION-total_received)/PACKET_LOSS_PRECISSION)
-        #print(total_received, loss)
+        #print("\nPerdidas ",total_received, loss)
         if loss < 0:
             loss = 0
+        #print("\nPerdidas ",total_received, loss)
         #print(smothed_latency,jitter,loss)
         return smoothed_latency,jitter,loss
 
@@ -363,18 +365,22 @@ class q4s_lite_node():
                 if self.packet_loss_decoration==0:
                     self.socket.sendto(packet, self.target_address)
                 elif self.packet_loss_decoration>0:
-                    if random.random()>self.packet_loss_decoration:
+                    if not (self.seq_number % int(100*self.packet_loss_decoration) == 0):
+                    #if random.random()>self.packet_loss_decoration:
                         self.socket.sendto(packet, self.target_address)
+                    #else:
+                        #print(f"\nPaquete no enviado {self.packet_loss_decoration}")
                 #self.socket.sendto(packet, self.target_address)
                 logger.debug(f"[MEASURING SEND PING] n_seq:{packet_data[1]}: lat_up:{packet_data[3]} lat_down:{packet_data[4]} jit_up:{packet_data[5]} jit_down:{packet_data[6]} pl_up:{packet_data[7]} pl_down:{packet_data[8]}")
                 with self.lock:
-                    self.total_received-=self.packets_received[self.seq_number]
-                    self.packets_received[self.seq_number] = 1
+                    if self.first_packet == True:
+                        self.total_received-=self.packets_received[self.seq_number]
+                        self.packets_received[self.seq_number] = 0
                 self.seq_number = (self.seq_number+1)%PACKET_LOSS_PRECISSION
                 #Packet loss strategy: Como mido por tandas, primero no mido, luego si, luego no, otra vez si... reseteo el total_received
-                if self.seq_number == 0:
+                #if self.seq_number == 0:
                     #print(f"\nSe han enviado 100 paquetes y se resetea total received que ahora vale {self.total_received}\n")
-                    self.total_received = PACKET_LOSS_PRECISSION
+                    #self.total_received = PACKET_LOSS_PRECISSION
 
                 time.sleep(TIME_BETWEEN_PINGS)#Esto es la cadencia de paquetes por segundo, configurable tambien
                 #responsividad es packetloss_precission/cadencia
@@ -460,6 +466,10 @@ class q4s_lite_node():
                 elif message_type == "RESP": #RESP
                     #actualizo el packet received                    
                     with self.lock:
+                        if self.first_packet == False:
+                            self.first_packet = True
+                            self.total_received = 100
+                        self.packets_received[unpacked_data[1]]=1
                         self.total_received += self.packets_received[unpacked_data[1]]
                         #self.packets_received[unpacked_data[1]]=0
                         #lo puedo poner a 1 para medir antes y no esperar tanto entre mediciones
