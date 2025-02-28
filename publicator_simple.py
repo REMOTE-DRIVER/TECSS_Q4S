@@ -13,8 +13,8 @@ client_address, client_port = "127.0.0.1",20002
 #Parametros del actuador
 publicator_alive = False
 mqtt_host,mqtt_port = "127.0.0.1",8889
-PUBLICATION_TIME = 3 #segundos
-PUBLICATION_ALERT_TIME = 1 #segundo
+PUBLICATION_TIME = 300 #segundos
+PUBLICATION_ALERT_TIME = 100 #segundo
 
 #logging
 logger = logging.getLogger('q4s_logger')
@@ -97,7 +97,7 @@ def main():
 			elif option == '2':
 				q4s_node.latency_decoration=0
 			elif option == '3':
-				q4s_node.packet_loss_decoration+=0.1
+				q4s_node.packet_loss_decoration=0.8
 				print(f"Packet_loss_decoration =  {q4s_node.packet_loss_decoration}")
 			elif option == '4':
 				q4s_node.packet_loss_decoration=0

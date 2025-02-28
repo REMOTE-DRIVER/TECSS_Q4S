@@ -31,7 +31,7 @@ FUENTES = 1
 slot = FUENTES*250000 #TODO en mayusculas
 #ORIG_BANDWIDTH = FUENTES * 6000000
 MAX_ALERTS_CONSECUTIVES = 3
-
+DEMO = False
 #Test
 valores = None
 
@@ -155,7 +155,7 @@ def actuator(q4s_node):
                 coder_actual_bandwidth,coder_orig_bandwidth = int(coder_actual_and_orig_bandwidth[0]), int(coder_actual_and_orig_bandwidth[1]) 
                 #Subir ancho de banda hasta que llegue al original(ORIG_BANDWIDTH), si es el original no hace nada
                 print(f"\n    [ACTUATOR (0)] Actual bw:{coder_actual_bandwidth} Orig bw:{coder_orig_bandwidth}\n")
-                if actuator_bandwidth <= ORIG_BANDWIDTH-(slot/FUENTES):
+                if actuator_bandwidth <= ORIG_BANDWIDTH#-(slot/FUENTES): TODO: checkear ese margen
                     print("\n    [ACTUATOR (0)]: Estoy por debajo del ancho de banda, lo subo un slot\n")
                     #subirlo hasta llegar a orig_bandwidth                
                     if coder_actual_bandwidth == coder_orig_bandwidth:
@@ -236,6 +236,10 @@ def actuator(q4s_node):
                     else:
                         #actuator_bandwidth = coder_actual_bandwidth - slot
                         actuator_bandwidth = bandwidth_parameter
+                if DEMO:
+                    if q4s_node.packet_loss_decoration>=0.1:
+                        q4s_node.packet_loss_decoration-=0.05
+                        print(f"[ACTUATOR] New packet loss decoration {q4s_node.packet_loss_decoration}")
             else:
                 actuator_latency_alert = False  
             
@@ -254,19 +258,21 @@ def actuator(q4s_node):
                     print(f"\n[ACTUATOR]{datetime.now().strftime("%H:%M:%S.%f")[:-3]} Me ha llegado una alerta por packet loss\n\tcliente: {q4s_node.packet_loss_up}\n\tserver: {q4s_node.packet_loss_down}\n\tcombinado: {q4s_node.packet_loss_combined}")
                     margen = slot/actuator_bandwidth 
                     print(f"\nMargen {margen} = {slot}/{actuator_bandwidth} y se va a comparar con {abs(after_alert_packet_loss-state1_packet_loss)}\n")
-                    if abs(after_alert_packet_loss-state1_packet_loss) < margen:
-                        consecutive_alerts+=1#%(MAX_ALERTS_CONSECUTIVES)
-                    else:
+                    if after_alert_packet_loss >= state1_packet_loss: #Empeoras
+                        consecutive_alerts+=1 
+                    elif abs(after_alert_packet_loss-state1_packet_loss) > margen: #Se resetea si mejoras bastante
                         consecutive_alerts = 0
+                    #Si no mejoras bastante, sigues con el contador de alertas consecutivas iguales
+                    #TODO: Repetir esto en el estado 2 al perder paquetes
                     #Paso 3: Si llegan 3 alertas, te vas al estado 2
-                    print(f"\nAlertas consecutivas: {consecutive_alerts}")
+                    print(f"\nAlertas consecutivas sin mejora: {consecutive_alerts}")
                     if consecutive_alerts < MAX_ALERTS_CONSECUTIVES:
                         state = 1
                         continue
                     elif consecutive_alerts==MAX_ALERTS_CONSECUTIVES: #consecutive alerts = 3 que es 0 
                         consecutive_alerts = 0
                         state = 2
-                        print("\n    [ACTUATOR (1)]: 3 alertas consecutivas, paso al estado 2\n")
+                        print("\n    [ACTUATOR (1)]: 3 alertas consecutivas sin mejora, paso al estado 2\n")
                         continue
                 else: #latency alert 
                     state = 1
@@ -302,7 +308,6 @@ def actuator(q4s_node):
             margen = slot/actuator_bandwidth 
             print(f"\nMargen {margen} = {slot}/{actuator_bandwidth} y se {abs(new_packet_loss- state2_packet_loss )}\n")
             if abs(new_packet_loss-state2_packet_loss) > margen: #TODO: Consensuar con Nokia el valor 
-            #if new_packet_loss > state2_packet_loss and new_packet_loss > state2_packet_loss * (1 + 0.01): #diferencia relativa
                 #Se consulta ancho de banda
                 print("\n    [ACTUATOR (2)]: He esperado y ha crecido la perdida, intento bajar ancho de banda\n") 
                 try:

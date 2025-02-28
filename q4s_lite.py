@@ -122,8 +122,9 @@ class q4s_lite_node():
         self.packet_loss_combined = 0.0
         #packet_loss control
         self.first_packet = False
-        self.packets_received = [1] * PACKET_LOSS_PRECISSION
+        self.packets_received = [0] * PACKET_LOSS_PRECISSION
         self.total_received = PACKET_LOSS_PRECISSION
+        self.max_transit_packets = 10 #TODO: Esta distancia dependera de los paquetes por segundo, porque si la latencia es mas de 300 ya es muy alta y no hace falta aumentar la distancia
         #state
         self.state=None,None #Es una tupla de nombre estado, timestamp cuando se puso, ver si la alerta es larga
         #lock para acceso critico
@@ -365,17 +366,27 @@ class q4s_lite_node():
                 if self.packet_loss_decoration==0:
                     self.socket.sendto(packet, self.target_address)
                 elif self.packet_loss_decoration>0:
-                    if not (self.seq_number % int(100*self.packet_loss_decoration) == 0):
+                    if not (self.seq_number % int(100*self.packet_loss_decoration) > 0):
+                    #if self.seq_number % int(1/self.packet_loss_decoration) != 0:
                     #if random.random()>self.packet_loss_decoration:
                         self.socket.sendto(packet, self.target_address)
                     #else:
-                        #print(f"\nPaquete no enviado {self.packet_loss_decoration}")
+                        #print(f"\nPaquete no enviado {self.seq_number}")
                 #self.socket.sendto(packet, self.target_address)
                 logger.debug(f"[MEASURING SEND PING] n_seq:{packet_data[1]}: lat_up:{packet_data[3]} lat_down:{packet_data[4]} jit_up:{packet_data[5]} jit_down:{packet_data[6]} pl_up:{packet_data[7]} pl_down:{packet_data[8]}")
                 with self.lock:
-                    if self.first_packet == True:
-                        self.total_received-=self.packets_received[self.seq_number]
-                        self.packets_received[self.seq_number] = 0
+                    #k es bla bla
+                    #0 es llega bien o primer envío
+                    #1 es que se da por perdido sin contabilizar
+                    #2 perdido pero ya contabilizado
+                    k = ((self.seq_number - self.max_transit_packets)+PACKET_LOSS_PRECISSION)%PACKET_LOSS_PRECISSION                    
+                    if self.packets_received[k] == 1:
+                        #se perdio el paquete k y lo vamos a compensar
+                        self.total_received -= 1 #Contabilizamos la perdida
+                        self.packets_received[k] = 2                     
+                    #print(f"TOTAL RECEIVED: {self.total_received}  K Vale: {k}  i vale:{self.seq_number}")
+                    if self.packets_received[self.seq_number] == 0:
+                        self.packets_received[self.seq_number] = 1 #damos por perdido de momento
                 self.seq_number = (self.seq_number+1)%PACKET_LOSS_PRECISSION
                 #Packet loss strategy: Como mido por tandas, primero no mido, luego si, luego no, otra vez si... reseteo el total_received
                 #if self.seq_number == 0:
@@ -460,20 +471,23 @@ class q4s_lite_node():
                     self.update_measures(unpacked_data)
                     logger.debug(f"[MEASURING RECEIVE PING] n_seq:{unpacked_data[1]}: lat_up:{unpacked_data[3]} lat_down:{unpacked_data[4]} jit_up:{unpacked_data[5]} jit_down:{unpacked_data[6]} pl_up:{unpacked_data[7]} pl_down:{unpacked_data[8]}")
                     packet_data = (resp_message,*unpacked_data[1:])#,unpacked_data[1],unpacked_data[2],unpacked_data[3],unpacked_data[4],unpacked_data[5],unpacked_data[6],unpacked_data[7],unpacked_data[8])
+                    '''with self.lock:
+                        if self.first_packet == False:
+                            self.first_packet = True
+                            self.total_received = 100
+                        self.packets_received[unpacked_data[1]]=1
+                        self.total_received += self.packets_received[unpacked_data[1]]'''
                     packet = struct.pack(PACKET_FORMAT, *packet_data)
                     self.socket.sendto(packet,self.target_address)
                     logger.debug(f"[MEASURING CONTEST RESP] n_seq:{packet_data[1]}: lat_up:{packet_data[3]} lat_down:{packet_data[4]} jit_up:{packet_data[5]} jit_down:{packet_data[6]} pl_up:{packet_data[7]} pl_down:{packet_data[8]}")
                 elif message_type == "RESP": #RESP
                     #actualizo el packet received                    
                     with self.lock:
-                        if self.first_packet == False:
-                            self.first_packet = True
-                            self.total_received = 100
-                        self.packets_received[unpacked_data[1]]=1
-                        self.total_received += self.packets_received[unpacked_data[1]]
-                        #self.packets_received[unpacked_data[1]]=0
-                        #lo puedo poner a 1 para medir antes y no esperar tanto entre mediciones
-                        #self.total_received+=1 #self.packets_received[unpacked_data[1]]                    
+                        #unpacked_data[1] es el numero de secuencia
+                        n_seq_actual = unpacked_data[1]
+                        if self.packets_received[n_seq_actual] == 2:
+                            self.total_received += 1 #Dejamos de contabilizar la perdida y sumamos al contador
+                        self.packets_received[n_seq_actual] = 0
                     logger.debug(f"[MEASURING RECEIVE RESP] n_seq:{unpacked_data[1]}: lat_up:{unpacked_data[3]} lat_down:{unpacked_data[4]} jit_up:{unpacked_data[5]} jit_down:{unpacked_data[6]} pl_up:{unpacked_data[7]} pl_down:{unpacked_data[8]}")
                     
                     if self.role=="server":
@@ -486,11 +500,11 @@ class q4s_lite_node():
                     #Combinacion de medidas
                     self.latency_combined = COMBINED_FUNC(self.latency_up,self.latency_down,self.role)
                     self.packet_loss_combined = COMBINED_FUNC(self.packet_loss_up,self.packet_loss_down,self.role)
+                    self.jitter_combined = COMBINED_FUNC(self.jitter_up,self.jitter_down,self.role)
                     
                     #Posible TODO: Printar y comprobar alertas cada n paquetes, los necesarios para dar una alarma cada SMOOTHING_PARAM Paquetes
                     #mejor llamar mucho y comprobarlo dentro, en caso de fallo llegan pocos recoveries y puedes perder tiempo
-                    print(f"[MEASURING (combined)] Latency:{self.latency_combined:.10f} Packet_loss: {self.packet_loss_combined:.3f}", end="\r")
-                    #print(f"[MEASURING (combined)] Latency:{self.latency_combined:.10f} Packet_loss: {self.packet_loss_combined}", end="\r")
+                    print(f"[MEASURING (combined)] Latency:{self.latency_combined:.10f} Packet_loss: {self.packet_loss_combined:.3f} Jitter: {self.jitter_combined:.3f}", end="\r")
                     self.check_alert(self.latency_combined>=LATENCY_ALERT,self.packet_loss_combined>=PACKET_LOSS_ALERT)
                     if self.latency_decoration > 0:
                         time.sleep(self.latency_decoration)
