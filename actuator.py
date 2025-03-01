@@ -30,7 +30,7 @@ PACKET_LOSS_ALERT = q4s_lite.PACKET_LOSS_ALERT#0.1#0.02 #2%
 FUENTES = 1
 slot = FUENTES*250000 #TODO en mayusculas
 #ORIG_BANDWIDTH = FUENTES * 6000000
-MAX_ALERTS_CONSECUTIVES = 3
+MAX_ALERTS_CONSECUTIVES = 6
 DEMO = False
 #Test
 valores = None
@@ -155,7 +155,7 @@ def actuator(q4s_node):
                 coder_actual_bandwidth,coder_orig_bandwidth = int(coder_actual_and_orig_bandwidth[0]), int(coder_actual_and_orig_bandwidth[1]) 
                 #Subir ancho de banda hasta que llegue al original(ORIG_BANDWIDTH), si es el original no hace nada
                 print(f"\n    [ACTUATOR (0)] Actual bw:{coder_actual_bandwidth} Orig bw:{coder_orig_bandwidth}\n")
-                if actuator_bandwidth <= ORIG_BANDWIDTH#-(slot/FUENTES): TODO: checkear ese margen
+                if actuator_bandwidth <= ORIG_BANDWIDTH-(slot/FUENTES): #TODO: checkear ese margen
                     print("\n    [ACTUATOR (0)]: Estoy por debajo del ancho de banda, lo subo un slot\n")
                     #subirlo hasta llegar a orig_bandwidth                
                     if coder_actual_bandwidth == coder_orig_bandwidth:
@@ -272,7 +272,7 @@ def actuator(q4s_node):
                     elif consecutive_alerts==MAX_ALERTS_CONSECUTIVES: #consecutive alerts = 3 que es 0 
                         consecutive_alerts = 0
                         state = 2
-                        print("\n    [ACTUATOR (1)]: 3 alertas consecutivas sin mejora, paso al estado 2\n")
+                        print("\n    [ACTUATOR (1)]: Muchas alertas consecutivas sin mejora, paso al estado 2\n")
                         continue
                 else: #latency alert 
                     state = 1
