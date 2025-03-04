@@ -14,7 +14,7 @@ client_address, client_port = "127.0.0.1",20002
 publicator_alive = False
 mqtt_host,mqtt_port = "127.0.0.1",8889
 PUBLICATION_TIME = 3 #segundos
-PUBLICATION_ALERT_TIME = 1 #segundo
+PUBLICATION_ALERT_TIME = 0.5 #segundo
 
 #logging
 logger = logging.getLogger('q4s_logger')

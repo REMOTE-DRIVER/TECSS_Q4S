@@ -308,7 +308,7 @@ class q4s_lite_node():
     def get_metrics(reception_time,sent_time,last_latency,total_received):
         global UP_INDEX,DOWN_INDEX
         new_latency = ((reception_time-sent_time)*1000)/2 #rtt/2
-        jitter = abs(new_latency-last_latency) #El valor absoluto
+        jitter = abs(new_latency-last_latency) #El valor absoluto TODO restar la original, no la smoothed
         #amortiguacion 
         #smoothed_latency = SMOOTHING_PARAM * new_latency + (1 - SMOOTHING_PARAM) * last_latency
         #smothed_latency = last_latency + ((new_latency - last_latency) / SMOOTHING_PARAM)
