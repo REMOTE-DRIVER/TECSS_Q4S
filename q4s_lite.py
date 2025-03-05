@@ -445,14 +445,14 @@ class q4s_lite_node():
                 self.state="alert",time.perf_counter()
                 self.event.set()
                 logger.debug(f"[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
-                print(f"\n[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
+                #print(f"\n[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
         elif self.state[0]=="alert":
             if time.perf_counter()-self.state[1]>=KEEP_ALERT_TIME:#Solo comprueba si ha pasado x tiempo, esto se puede comprobar antes de invocar
                 if alert_latency or alert_packet_loss:
                     self.state="alert",time.perf_counter()
                     self.event.set()
                     logger.debug(f"[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
-                    print(f"\n[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
+                    #print(f"\n[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
                 else:
                     self.state="normal",time.perf_counter()
                     logger.debug(f"[RECOVERY]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
@@ -615,7 +615,7 @@ if __name__=="__main__":
                     print("3: Pierde un 10 por ciento mas de paquetes")
                     print("4: No pierdas paquetes")
                     print("0: Atrás")
-                    sub_option = input("Elige una opción: ")
+                    sub_option = input("Elige una opción: \n")
 
                     if sub_option == '0':
                         break
@@ -643,7 +643,7 @@ if __name__=="__main__":
                     print("3: Pierde un 10 por ciento mas de paquetes")
                     print("4: No pierdas paquetes")
                     print("0: Atrás")
-                    sub_option = input("Elige una opción: ")
+                    sub_option = input("Elige una opción: \n")
 
                     if sub_option == '0':
                         break
