@@ -223,7 +223,6 @@ class q4s_lite_node():
                     self.total_received-=self.packets_received[self.seq_number]
                     self.packets_received[self.seq_number] = 1
                 self.seq_number = (self.seq_number+1)%PACKET_LOSS_PRECISSION
-                #Packet loss strategy: Como mido por tandas, primero no mido, luego si, luego no, otra vez si... reseteo el total_received
                 if self.seq_number == 0:
                     self.total_received = PACKET_LOSS_PRECISSION
                 time.sleep(TIME_BETWEEN_PINGS)#Esto es la cadencia de paquetes por segundo, configurable tambien
@@ -366,8 +365,8 @@ class q4s_lite_node():
                 if self.packet_loss_decoration==0:
                     self.socket.sendto(packet, self.target_address)
                 elif self.packet_loss_decoration>0:
-                    if not (self.seq_number % int(100*self.packet_loss_decoration) > 0):
-                    #if self.seq_number % int(1/self.packet_loss_decoration) != 0:
+                    #if not (self.seq_number % int(100*self.packet_loss_decoration) > 0):
+                    if self.seq_number % int(1/self.packet_loss_decoration) != 0:
                     #if random.random()>self.packet_loss_decoration:
                         self.socket.sendto(packet, self.target_address)
                     #else:
@@ -395,6 +394,8 @@ class q4s_lite_node():
 
                 time.sleep(TIME_BETWEEN_PINGS)#Esto es la cadencia de paquetes por segundo, configurable tambien
                 #responsividad es packetloss_precission/cadencia
+                #if self.latency_decoration > 0:
+                #        time.sleep(self.latency_decoration)
             except KeyboardInterrupt:
                 self.measuring=False
             except ConnectionResetError as e:
@@ -468,6 +469,8 @@ class q4s_lite_node():
                 unpacked_data = struct.unpack(PACKET_FORMAT, data)
                 message_type = unpacked_data[0].decode(MSG_FORMAT).strip()  # El tipo de mensaje es el primer campo
                 if message_type == "PING": #PING
+                    #if self.latency_decoration > 0:
+                    #    time.sleep(self.latency_decoration)
                     self.update_measures(unpacked_data)
                     logger.debug(f"[MEASURING RECEIVE PING] n_seq:{unpacked_data[1]}: lat_up:{unpacked_data[3]} lat_down:{unpacked_data[4]} jit_up:{unpacked_data[5]} jit_down:{unpacked_data[6]} pl_up:{unpacked_data[7]} pl_down:{unpacked_data[8]}")
                     packet_data = (resp_message,*unpacked_data[1:])#,unpacked_data[1],unpacked_data[2],unpacked_data[3],unpacked_data[4],unpacked_data[5],unpacked_data[6],unpacked_data[7],unpacked_data[8])
@@ -506,8 +509,8 @@ class q4s_lite_node():
                     #mejor llamar mucho y comprobarlo dentro, en caso de fallo llegan pocos recoveries y puedes perder tiempo
                     print(f"[MEASURING (combined)] Latency:{self.latency_combined:.10f} Packet_loss: {self.packet_loss_combined:.3f} Jitter: {self.jitter_combined:.3f}", end="\r")
                     self.check_alert(self.latency_combined>=LATENCY_ALERT,self.packet_loss_combined>=PACKET_LOSS_ALERT)
-                    if self.latency_decoration > 0:
-                        time.sleep(self.latency_decoration)
+                    #if self.latency_decoration > 0:
+                    #    time.sleep(self.latency_decoration)
 
             except KeyboardInterrupt:
                 self.measuring=False
@@ -610,19 +613,21 @@ if __name__=="__main__":
             try:
                 while q4s_node.running:#Aqui se puede poner menu de control con simulacion de perdidas etc...
                     #time.sleep(0.1)
-                    print("\n1: Empeora latencia")
-                    print("2: Mejora latencia")
-                    print("3: Pierde un 10 por ciento mas de paquetes")
-                    print("4: No pierdas paquetes")
+                    #print("\n1: Empeora latencia")
+                    #print("2: Mejora latencia")
+                    print("\n1: Pierde un 10 por ciento mas de paquetes")
+                    print("2: No pierdas paquetes")
                     print("0: Atrás")
                     sub_option = input("Elige una opción: \n")
 
                     if sub_option == '0':
                         break
                     elif sub_option == '1':
-                        q4s_node.latency_decoration += 0.1
+                        #q4s_node.latency_decoration += 0.1
+                        q4s_node.packet_loss_decoration += 0.1
                     elif sub_option == '2':
-                        q4s_node.latency_decoration = 0
+                        #q4s_node.latency_decoration = 0
+                        q4s_node.packet_loss_decoration = 0
                     elif sub_option == '3':
                         q4s_node.packet_loss_decoration += 0.1
                     elif sub_option == '4':
@@ -638,19 +643,21 @@ if __name__=="__main__":
             q4s_node.run()
             try:
                 while q4s_node.running:#Aqui se puede poner menu de control con simulacion de perdidas etc...
-                    print("\n1: Empeora latencia")
-                    print("2: Mejora latencia")
-                    print("3: Pierde un 10 por ciento mas de paquetes")
-                    print("4: No pierdas paquetes")
+                    #print("\n1: Empeora latencia")
+                    #print("2: Mejora latencia")
+                    print("\n1: Pierde un 10 por ciento mas de paquetes")
+                    print("2: No pierdas paquetes")
                     print("0: Atrás")
                     sub_option = input("Elige una opción: \n")
 
                     if sub_option == '0':
                         break
                     elif sub_option == '1':
-                        q4s_node.latency_decoration += 0.1
+                        #q4s_node.latency_decoration += 0.1
+                        q4s_node.packet_loss_decoration += 0.1
                     elif sub_option == '2':
-                        q4s_node.latency_decoration = 0
+                        #q4s_node.latency_decoration = 0
+                        q4s_node.packet_loss_decoration = 0
                     elif sub_option == '3':
                         q4s_node.packet_loss_decoration += 0.1
                     elif sub_option == '4':
