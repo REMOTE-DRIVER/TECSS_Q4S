@@ -123,7 +123,7 @@ def actuator(q4s_node):
     state = 0
     consecutive_alerts = 0
     prev_packet_loss = None
-    tiempo_espera = q4s_lite.KEEP_ALERT_TIME #TODO: Consensuar este tiempo con JJ, Sergio y Alberto
+    tiempo_espera = q4s_lite.KEEP_ALERT_TIME+1 #TODO: Consensuar este tiempo con JJ, Sergio y Alberto
 
     #Peticion inicial de ancho de banda
     ORIG_BANDWIDTH = 0

@@ -55,8 +55,10 @@ def alert_publicator(q4s_node):
 		#				si no:
 		#					continue
 		if q4s_node.latency_combined > LATENCY_ALERT and q4s_node.packet_loss_combined > PACKET_LOSS_ALERT:
+
 			print(f"[PUBLICATOR ALERTS]Me ha llegado una alerta de latencia y packet loss            \n")#Faltan packetloss y jitter
 			client_mqtt.publish('alertas', 'Me ha llegado una alerta de latencia y packet loss')
+			#print(f"[PUBLICATOR ALERTS]Me ha llegado una alerta de latencia y packet loss            ")#Faltan packetloss y jitter
 		elif q4s_node.latency_combined > LATENCY_ALERT:
 			print("[PUBLICATOR ALERTS]Me ha llegado una alerta por latencia                     ")
 			client_mqtt.publish('alertas', 'Me ha llegado una alerta por latencia')
