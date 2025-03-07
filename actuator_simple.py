@@ -261,7 +261,7 @@ def actuator_new(q4s_node):
             new_packet_loss = q4s_node.packet_loss_combined
 
             #Paso 3: Si es peor bajamos un slot de ancho de banda y volvemos a estado 2
-            if new_packet_loss > state2_packet_loss and (new_packet_loss-state2_packet_los) > 0.01: #TODO: Consensuar con Nokia el valor 
+            if new_packet_loss > state2_packet_loss and (new_packet_loss-state2_packet_loss) > 0.01: #TODO: Consensuar con Nokia el valor 
             #if new_packet_loss > state2_packet_loss and new_packet_loss > state2_packet_loss * (1 + 0.01): #diferencia relativa
                 #Se consulta ancho de banda 
                 try:
