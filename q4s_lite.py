@@ -30,13 +30,13 @@ reset_message = "RST".ljust(4).encode(MSG_FORMAT)
 
 NEGOTIATION_TIME = 5 #Dependera de lo que tarde en limpiarse una ventana de packet loss
 
-PACKETS_PER_SECOND = 30
+PACKETS_PER_SECOND = 30 
 
 
 PACKET_LOSS_PRECISSION = 100 #Precision de los paquetes perdidos
 LATENCY_ALERT = 295 #milisegundos
 PACKET_LOSS_ALERT = 0.02 #tanto por 1
-KEEP_ALERT_TIME = (PACKET_LOSS_PRECISSION / PACKETS_PER_SECOND) #1 #segundos que estas en estado de alerta a partir del cual vuelve a avisar al actuador, para no avisarle en todos los paquetes
+KEEP_ALERT_TIME = (PACKET_LOSS_PRECISSION / PACKETS_PER_SECOND) #segundos que estas en estado de alerta a partir del cual vuelve a avisar al actuador, para no avisarle en todos los paquetes
 #deberia ser lo que tardas en que pase la ventana de packet_loss
 print(f"KEEP_ALERT_TIME={KEEP_ALERT_TIME}")
 #Estrategias de combinacion de latencia_OLD
@@ -48,7 +48,7 @@ print(f"KEEP_ALERT_TIME={KEEP_ALERT_TIME}")
 LATENCY_CHECKPOINT = [3,5,7,9]# definen crecimiento y diferencia de latencia, jj recomienda de 3,4,5,6
 UP_INDEX = 0
 DOWN_INDEX = 0
-TIME_BETWEEN_PINGS = 1/PACKETS_PER_SECOND #30 paquetes por segundo
+TIME_BETWEEN_PINGS = 1/PACKETS_PER_SECOND 
 
 #Estrategias de combinacion de medidas, la media, la mayor, la menor,no hacer nada, etc...
 #x e y son las latencias de cada lado, z es el rol de quien invoca
@@ -61,7 +61,6 @@ COMBINED_FUNC = MEASURE_COMBINATIONS[MEASURE_COMBINATION_STRATEGY]
 
 #Tiempo en segundos para medir los errores de conexion
 CONNECTION_ERROR_TIME_MARGIN = 1
-
 
 server_address, server_port = "127.0.0.1",20001
 client_address, client_port = "127.0.0.1",20002
@@ -531,7 +530,7 @@ class q4s_lite_node():
                 print("\nConection timeout")
                 continue
             except ConnectionResetError as e:
-                #Si el so cierra la conexion porque no esta levantado el otro extremo
+                #No esta levantado el otro extremo
                 if self.connection_errors == 0:
                     first_connection_error_time = time.perf_counter()
                     #print("\n")
