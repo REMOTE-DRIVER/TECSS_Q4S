@@ -26,6 +26,7 @@ syn_message = "SYN".ljust(4).encode(MSG_FORMAT)
 ping_message ="PING".encode(MSG_FORMAT)
 resp_message = "RESP".encode(MSG_FORMAT)
 disc_message = "DISC".encode(MSG_FORMAT)
+reset_message = "RST".ljust(4).encode(MSG_FORMAT)
 
 NEGOTIATION_TIME = 5 #Dependera de lo que tarde en limpiarse una ventana de packet loss
 
@@ -57,6 +58,9 @@ MEASURE_COMBINATIONS = [lambda x,y,z: (x+y)/2,
                         lambda x,y,z: x if z=="client" else y]
 MEASURE_COMBINATION_STRATEGY = 0
 COMBINED_FUNC = MEASURE_COMBINATIONS[MEASURE_COMBINATION_STRATEGY]
+
+#Tiempo en segundos para medir los errores de conexion
+CONNECTION_ERROR_TIME_MARGIN = 1
 
 
 server_address, server_port = "127.0.0.1",20001
@@ -98,7 +102,7 @@ class q4s_lite_node():
         self.target_address = (target_address, target_port)
         #execution check
         self.running=False
-        #measurement stage params
+        #negotiation stage params
         self.negotiation_rcv=None
         self.negotiation_snd=None
         self.negotiating=False
@@ -116,6 +120,8 @@ class q4s_lite_node():
         self.jitter_down=0.0
         self.packet_loss_up=0.0
         self.packet_loss_down=0.0
+        #connection errors
+        self.connection_errors = 0
         #average_measures
         self.latency_combined = 0.0
         self.jitter_combined = 0.0
@@ -162,6 +168,9 @@ class q4s_lite_node():
                     else:
                         logger.info("[INIT CONNECTION] SERVER: Error, invalid confirmation")
                         return -1
+            else:#Reset te llegan ping o resp del otro extremo, pasas directamente a la fase de medicion
+                logger.info(f"[RESET CONNECTION] SERVER: Received PING or RESP message, going directly into Measurement stage")
+                return 0
         except socket.timeout:
             logger.info("[INIT CONNECTION] SERVER:Timeout")
             return -1
@@ -188,8 +197,9 @@ class q4s_lite_node():
                     self.socket.sendto(datos,self.target_address)
                     logger.info(f"[INIT CONNECTION] CLIENT: Conexion establecida ha tardado {timestamp_recepcion-timestamp} segundos")
                     return 0
-                else:
-                    logger.info("[INIT CONNECTION] CLIENT: Respuesta invalida")
+                else:#RESET
+                    logger.info("[RESET CONNECTION] CLIENT: Received PING or RESP while initializating connection")
+                    return 0
             except socket.timeout:
                 retries+=1
                 logger.info(f"[INIT CONNECTION] CLIENT: Timeout, reintentando {retries}/3")
@@ -511,12 +521,6 @@ class q4s_lite_node():
                     self.check_alert(self.latency_combined>=LATENCY_ALERT,self.packet_loss_combined>=PACKET_LOSS_ALERT)
                     #if self.latency_decoration > 0:
                     #    time.sleep(self.latency_decoration)
-                '''else: #Reset de la pila inicio de conexion
-                    print(f"\n{message_type}")
-                    self.measuring = False
-                    self.running = False
-                    self.run()'''
-
 
             except KeyboardInterrupt:
                 self.measuring=False
@@ -528,10 +532,13 @@ class q4s_lite_node():
                 continue
             except ConnectionResetError as e:
                 #Si el so cierra la conexion porque no esta levantado el otro extremo
-                #self.measuring = False
-                #self.running = False
-                #self.event.set()
-                #print("\nConection error") 
+                if self.connection_errors == 0:
+                    first_connection_error_time = time.perf_counter()
+                    #print("\n")
+                self.connection_errors+=1
+                print(f"Conection errors in last {CONNECTION_ERROR_TIME_MARGIN} second: {self.connection_errors}\t\t\t\t\t\t", end="\r") 
+                if time.perf_counter()-first_connection_error_time >= CONNECTION_ERROR_TIME_MARGIN:
+                    self.connection_errors = 0
                 continue
             except Exception as error:
                 print(f"Error recibiendo mensajes {error}")
