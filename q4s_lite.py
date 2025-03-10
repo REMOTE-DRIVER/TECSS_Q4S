@@ -374,7 +374,7 @@ class q4s_lite_node():
                 #self.socket.sendto(packet, self.target_address)
                 logger.debug(f"[MEASURING SEND PING] n_seq:{packet_data[1]}: lat_up:{packet_data[3]} lat_down:{packet_data[4]} jit_up:{packet_data[5]} jit_down:{packet_data[6]} pl_up:{packet_data[7]} pl_down:{packet_data[8]}")
                 with self.lock:
-                    #k es bla bla
+                    #k es la posicion en la que miras teniendo en cuenta los paquetes en transito
                     #0 es llega bien o primer envío
                     #1 es que se da por perdido sin contabilizar
                     #2 perdido pero ya contabilizado
@@ -511,31 +511,30 @@ class q4s_lite_node():
                     self.check_alert(self.latency_combined>=LATENCY_ALERT,self.packet_loss_combined>=PACKET_LOSS_ALERT)
                     #if self.latency_decoration > 0:
                     #    time.sleep(self.latency_decoration)
+                '''else: #Reset de la pila inicio de conexion
+                    print(f"\n{message_type}")
+                    self.measuring = False
+                    self.running = False
+                    self.run()'''
+
 
             except KeyboardInterrupt:
                 self.measuring=False
             except socket.timeout:
-                self.measuring = False
-                self.running = False
-                #if self.event != None:
-                self.event.set()
+                #self.measuring = False
+                #self.running = False
+                #self.event.set()
                 print("\nConection timeout")
+                continue
             except ConnectionResetError as e:
                 #Si el so cierra la conexion porque no esta levantado el otro extremo
-                #Tambien si se cae el otro extremo, esto ocurre cuando lo pruebo en local, en dos maquinas se podra gestionar bien TODO
-                #Esto ocurre en cuanto se corta la conexion
-                #TODO: Podria volver al init conection para esperar al otro extremo
-                self.measuring = False
-                self.running = False
-                #if self.event != None:
-                self.event.set()
-                print("\nConection error")
-                
-                #continue
-            except Exception as error:
-                #pass
-                #print(f"Error recibiendo mensajes {error}")#suelen entrar timeouts, tratar en el futuro
                 #self.measuring = False
+                #self.running = False
+                #self.event.set()
+                #print("\nConection error") 
+                continue
+            except Exception as error:
+                print(f"Error recibiendo mensajes {error}")
                 continue
         self.socket.close()
         print("\n[MEASURING] END")
