@@ -15,7 +15,7 @@ client_address, client_port = "127.0.0.1",20002
 #Parametros mqtt
 publicator_alive = False
 mqtt_host, mqtt_port = "remotedriver.dit.upm.es", 41883
-username = "nokia"
+username = "nokiatecss"
 # Leer la contraseña desde el archivo
 with open("password.txt", "r") as file:
     password = file.read().strip()
