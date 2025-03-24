@@ -163,3 +163,4 @@ cython_debug/
 
 # Local files
 password.txt
+suscriptor_mqtt.py
