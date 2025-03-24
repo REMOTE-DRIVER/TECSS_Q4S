@@ -37,6 +37,7 @@ PACKET_LOSS_PRECISSION = 100 #Precision de los paquetes perdidos
 LATENCY_ALERT = 295 #milisegundos
 PACKET_LOSS_ALERT = 0.02 #tanto por 1
 KEEP_ALERT_TIME = (PACKET_LOSS_PRECISSION / PACKETS_PER_SECOND) #segundos que estas en estado de alerta a partir del cual vuelve a avisar al actuador, para no avisarle en todos los paquetes
+KEEP_ALERT_TIME_PUBLICATOR = 1
 #deberia ser lo que tardas en que pase la ventana de packet_loss
 print(f"KEEP_ALERT_TIME={KEEP_ALERT_TIME}")
 #Estrategias de combinacion de latencia_OLD
@@ -90,7 +91,7 @@ client_handler.setFormatter(formatter)
 
 class q4s_lite_node():
 
-    def __init__(self, role, address, port, target_address, target_port, event=threading.Event()):
+    def __init__(self, role, address, port, target_address, target_port, event_publicator=threading.Event(),event_actuator=threading.Event()):
         #El rol importa para iniciar conex o medir up/down
         self.role = role 
         #udp socket params
@@ -131,11 +132,12 @@ class q4s_lite_node():
         self.total_received = PACKET_LOSS_PRECISSION
         self.max_transit_packets = 10 #TODO: Esta distancia dependera de los paquetes por segundo, porque si la latencia es mas de 300 ya es muy alta y no hace falta aumentar la distancia
         #state
-        self.state=None,None #Es una tupla de nombre estado, timestamp cuando se puso, ver si la alerta es larga
+        self.state=[None,None,None] #Es una tupla de nombre estado, timestamp cuando se puso en actuador y timestamp cuando se puso en publicador, ver si la alerta es larga
         #lock para acceso critico
         self.lock = threading.Lock()
         #evento para mandar la señal al modulo de actuacion o publicacion
-        self.event = event
+        self.event_actuator = event_actuator
+        self.event_publicator = event_publicator
         #Deterioro de latencias y descarte de paquetes
         self.latency_decoration = 0
         self.packet_loss_decoration = 0
@@ -432,40 +434,42 @@ class q4s_lite_node():
     #def check_alert(self,latency,packet_loss,data): #Quito el data porque ya no envio mensaje, lanzo alerta al actuador
     def check_alert(self,alert_latency,alert_packet_loss):
         #Se invoca con booleanos si hay alerta, para comprobar si la alerta es nueva o lleva un rato en alerta
-        '''if alert_latency or alert_packet_loss:
-            if self.state[0]=="normal":
-                self.state="alert",time.time()
-                if self.event != None:
-                    self.event.set()
-                logger.debug(f"[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
-                print(f"\n[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
-            elif self.state[0]=="alert":
-                if time.time()-self.state[1]>=KEEP_ALERT_TIME:#Solo comprueba si ha pasado x tiempo, esto se puede comprobar antes de invocar
-                    self.state="alert",time.time()
-                    if self.event != None:
-                        self.event.set()
-                    logger.debug(f"[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
-                    print(f"\n[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
-        elif time.time()-self.state[1]>=KEEP_ALERT_TIME:
-            #Cambiar estado a normal
-            pass'''
         logger.debug(f"ESTADO: {self.state}")
         if self.state[0]=="normal":
             if alert_latency or alert_packet_loss:
-                self.state="alert",time.perf_counter()
-                self.event.set()
+                self.state[0]="alert"
+                if alert_packet_loss:
+                    self.state[1]=time.perf_counter()
+                if alert_latency:
+                    self.state[2]=time.perf_counter()
+                self.event_publicator.set() #Al publicador le interesan todas las alertas, al actuador solo packet loss
+                if alert_packet_loss:
+                    self.event_actuator.set()
                 logger.debug(f"[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
                 #print(f"\n[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
         elif self.state[0]=="alert":
-            if time.perf_counter()-self.state[1]>=KEEP_ALERT_TIME:#Solo comprueba si ha pasado x tiempo, esto se puede comprobar antes de invocar
-                if alert_latency or alert_packet_loss:
-                    self.state="alert",time.perf_counter()
-                    self.event.set()
+            #TODO: check si es alerta de latencia o de packet loss, en cada caso se hace el set, 
+            #si es de latencia tambien se mira el packet loss, quizas no hace falta
+            if alert_packet_loss:
+                if time.perf_counter()-self.state[1]>=KEEP_ALERT_TIME:
+                    self.state[0]="alert",
+                    self.state[1] = time.perf_counter()
+                    self.event_actuator.set()
+                    self.event_publicator.set()
                     logger.debug(f"[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
-                    #print(f"\n[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
-                else:
-                    self.state="normal",time.perf_counter()
-                    logger.debug(f"[RECOVERY]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
+            elif alert_latency:
+                if time.perf_counter()-self.state[2]>=KEEP_ALERT_TIME_PUBLICATOR:
+                    #self.state="alert",time.perf_counter()
+                    self.state[0]="alert",
+                    self.state[2] = time.perf_counter()
+                    self.event_publicator.set()
+                    logger.debug(f"[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
+            else:
+                self.state[0]="normal"
+                self.state[1]=time.perf_counter()
+                self.state[2]=time.perf_counter()
+                logger.debug(f"[RECOVERY]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
+
 
     def measurement_receive_message(self):
         while self.measuring:
@@ -531,8 +535,12 @@ class q4s_lite_node():
                 continue
             except ConnectionResetError as e:
                 #No esta levantado el otro extremo
+                if time.perf_counter()-self.state[2]>=KEEP_ALERT_TIME_PUBLICATOR:
+                    self.state[0] = "alert"
+                    self.state[2] = time.perf_counter()
+                    self.event_publicator.set()#El primer error de conexion emite una alerta
                 if self.connection_errors == 0:
-                    first_connection_error_time = time.perf_counter()
+                    first_connection_error_time = time.perf_counter()                    
                     #print("\n")
                 self.connection_errors+=1
                 print(f"Conection errors in last {CONNECTION_ERROR_TIME_MARGIN} second: {self.connection_errors}\t\t\t\t\t\t", end="\r") 
@@ -589,7 +597,7 @@ class q4s_lite_node():
             self.hilo_rcv = threading.Thread(target=self.measurement_receive_message, daemon=True, name="hilo_rcv")
             self.hilo_snd = threading.Thread(target=self.measurement_send_ping, daemon=True, name="hilo_snd")
             
-            self.state=("normal",time.time())
+            self.state=["normal",time.time(),time.time()]
             self.measuring = True
             if self.role=="server":
                 self.hilo_rcv.start()
