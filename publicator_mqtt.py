@@ -3,12 +3,25 @@ import time
 import q4s_lite
 import logging
 
+import paho.mqtt.client as mqtt
+
 #Parametros q4s
 event = threading.Event()
 server_address, server_port = "127.0.0.1",20001
 client_address, client_port = "127.0.0.1",20002
 #server_address, server_port = "192.168.1.113", 20001
 #client_address, client_port = "192.168.1.50", 2000
+
+#Parametros mqtt
+publicator_alive = False
+mqtt_host, mqtt_port = "remotedriver.dit.upm.es", 41883
+username = "nokiatecss"
+# Leer la contraseña desde el archivo
+with open("password.txt", "r") as file:
+    password = file.read().strip()
+
+client_mqtt = mqtt.Client()
+client_mqtt.username_pw_set(username, password)
 
 PUBLICATION_TIME = 3 #segundos
 PUBLICATION_ALERT_TIME = 1 #segundo
@@ -47,10 +60,14 @@ def alert_publicator(q4s_node):
 		if q4s_node.latency_combined > LATENCY_ALERT and q4s_node.packet_loss_combined > PACKET_LOSS_ALERT:
 
 			print(f"[PUBLICATOR ALERTS]Me ha llegado una alerta de latencia y packet loss            \n")#Faltan packetloss y jitter
+			client_mqtt.publish('alertas', 'Me ha llegado una alerta de latencia y packet loss')
+			#print(f"[PUBLICATOR ALERTS]Me ha llegado una alerta de latencia y packet loss            ")#Faltan packetloss y jitter
 		elif q4s_node.latency_combined > LATENCY_ALERT:
 			print("[PUBLICATOR ALERTS]Me ha llegado una alerta por latencia                     ")
+			client_mqtt.publish('alertas', 'Me ha llegado una alerta por latencia')
 		elif q4s_node.packet_loss_combined > PACKET_LOSS_ALERT:
 			print("[PUBLICATOR ALERTS]Me ha llegado una alerta por packet loss                 ")
+			client_mqtt.publish('alertas', 'Me ha llegado una alerta por packet loss')
 		time.sleep(PUBLICATION_ALERT_TIME)
 	print("\nFinished alert publication you must relaunch the program\nPress 0 to exit\n")
 
@@ -58,6 +75,7 @@ def measures_publicator(q4s_node):
     global publicator_alive
     while publicator_alive:
         print(f"[PUBLICATOR] Measures Latency:{q4s_node.latency_combined:.10f} Packet_loss: {q4s_node.packet_loss_combined:.3f}")
+        client_mqtt.publish('medidas', f"Measures Latency:{q4s_node.latency_combined:.10f} Packet_loss: {q4s_node.packet_loss_combined:.3f}")
         time.sleep(PUBLICATION_TIME)
 
 
@@ -67,6 +85,7 @@ def main():
 	#El actuador es el server por defecto, ya que va en el proxy de video
 	q4s_node = q4s_lite.q4s_lite_node("server", server_address, server_port,client_address, client_port,event)
 	q4s_node.run()
+	client_mqtt.connect(mqtt_host, mqtt_port)
 	publicator_alive = True
 	alert_publicator_thread = threading.Thread(target=alert_publicator,args=(q4s_node,),daemon=True)
 	alert_publicator_thread.start()
@@ -92,6 +111,7 @@ def main():
 				q4s_node.measuring=False
 				q4s_node.hilo_snd.join()
 				q4s_node.hilo_rcv.join()
+				client_mqtt.disconnect()
 				break
 			elif option == '1':
 				q4s_node.latency_decoration+=0.1
