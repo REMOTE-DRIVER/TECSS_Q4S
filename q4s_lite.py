@@ -445,7 +445,7 @@ class q4s_lite_node():
                     self.state[2]=time.perf_counter()
                 self.event_publicator.set() #Al publicador le interesan todas las alertas, al actuador solo packet loss
                 logger.debug(f"[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
-                print(f"\n[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
+                #print(f"\n[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
         elif self.state[0]=="alert":
             if alert_packet_loss:
                 if time.perf_counter()-self.state[1]>=KEEP_ALERT_TIME:
@@ -455,7 +455,7 @@ class q4s_lite_node():
                     self.event_actuator.set()
                     self.event_publicator.set()
                     logger.debug(f"[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
-                    print(f"[ALERT] PACKET LOSS ALERT {self.state}")
+                    #print(f"[ALERT] PACKET LOSS ALERT {self.state}")
             elif alert_latency:
                 if time.perf_counter()-self.state[2]>=KEEP_ALERT_TIME_PUBLICATOR:
                     #self.state="alert",time.perf_counter()
@@ -463,7 +463,7 @@ class q4s_lite_node():
                     self.state[2] = time.perf_counter()
                     self.event_publicator.set()
                     logger.debug(f"[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
-                    print("[ALERT] LATENCY ALERT ")
+                    #print("[ALERT] LATENCY ALERT ")
             else:
                 self.state[0]="normal"
                 self.state[1]=time.perf_counter()
