@@ -91,7 +91,7 @@ client_handler.setFormatter(formatter)
 
 class q4s_lite_node():
 
-    def __init__(self, role, address, port, target_address, target_port, event_publicator=threading.Event(),event_actuator=threading.Event()):
+    def __init__(self, role, address, port, target_address, target_port, event_publicator=None,event_actuator=None):
         #El rol importa para iniciar conex o medir up/down
         self.role = role 
         #udp socket params
@@ -136,8 +136,8 @@ class q4s_lite_node():
         #lock para acceso critico
         self.lock = threading.Lock()
         #evento para mandar la señal al modulo de actuacion o publicacion
-        self.event_actuator = event_actuator
-        self.event_publicator = event_publicator
+        self.event_actuator = event_actuator if event_actuator is not None else threading.Event()
+        self.event_publicator = event_publicator if event_publicator is not None else threading.Event()
         #Deterioro de latencias y descarte de paquetes
         self.latency_decoration = 0
         self.packet_loss_decoration = 0
@@ -440,30 +440,30 @@ class q4s_lite_node():
                 self.state[0]="alert"
                 if alert_packet_loss:
                     self.state[1]=time.perf_counter()
+                    self.event_actuator.set()
                 if alert_latency:
                     self.state[2]=time.perf_counter()
                 self.event_publicator.set() #Al publicador le interesan todas las alertas, al actuador solo packet loss
-                if alert_packet_loss:
-                    self.event_actuator.set()
                 logger.debug(f"[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
-                #print(f"\n[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
+                print(f"\n[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
         elif self.state[0]=="alert":
-            #TODO: check si es alerta de latencia o de packet loss, en cada caso se hace el set, 
-            #si es de latencia tambien se mira el packet loss, quizas no hace falta
             if alert_packet_loss:
                 if time.perf_counter()-self.state[1]>=KEEP_ALERT_TIME:
-                    self.state[0]="alert",
+                    self.state[0]="alert"
                     self.state[1] = time.perf_counter()
+                    self.state[2] = time.perf_counter()
                     self.event_actuator.set()
                     self.event_publicator.set()
                     logger.debug(f"[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
+                    print(f"[ALERT] PACKET LOSS ALERT {self.state}")
             elif alert_latency:
                 if time.perf_counter()-self.state[2]>=KEEP_ALERT_TIME_PUBLICATOR:
                     #self.state="alert",time.perf_counter()
-                    self.state[0]="alert",
+                    self.state[0]="alert"
                     self.state[2] = time.perf_counter()
                     self.event_publicator.set()
                     logger.debug(f"[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
+                    print("[ALERT] LATENCY ALERT ")
             else:
                 self.state[0]="normal"
                 self.state[1]=time.perf_counter()
