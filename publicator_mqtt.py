@@ -37,39 +37,36 @@ client_handler.setFormatter(formatter)
 LATENCY_ALERT = q4s_lite.LATENCY_ALERT#360 #milisegundos
 PACKET_LOSS_ALERT = q4s_lite.PACKET_LOSS_ALERT#0.1#0.02 #2%
 
-def alert_publicator(q4s_node):
-	global publicator_alive
-	while publicator_alive:
-		#q4s_node.alert_publicator.wait()
-		#clear
-		#stop_publish_alert = False
-		#time_alert = time.time()
-		#while not stop_publish_alert:
-		#	publicas en mqtt el nuevo mensaje de alerta
-		#	time.sleep(publication_alert_time)
-		#	check si la alerta sigue activa
-		#		si esta activa:
-		#			time_alert = time.time()
-		#			continue
-		#		si no esta activa:
-		#			miras time.time() - time_alert > X: x es un numero cualquiera
-		#				si es asi:
-		#					break
-		#				si no:
-		#					continue
-		if q4s_node.latency_combined > LATENCY_ALERT and q4s_node.packet_loss_combined > PACKET_LOSS_ALERT:
+def check_alert(q4s_node):
+    '''Esta funcion comprueba el origen de la alerta y lo devuelve
+    perdida conexion, latencia, perdida paquetes, Resultado funcion
+    0                   0           0                0
+    0                   0           1                1
+    0                   1           0                2
+    0                   1           1                3
+    1                   0           0                4
+    1                   0           1                5
+    1                   1           0                6
+    1                   1           1                7'''
+    connection_alert = int(q4s_node.connection_errors > 0)
+    latency_alert = int(q4s_node.latency_combined > LATENCY_ALERT)
+    packet_loss_alert = int(q4s_node.packet_loss_combined > PACKET_LOSS_ALERT)
+    
+    alert_code = (connection_alert << 2) | (latency_alert << 1) | packet_loss_alert
 
-			print(f"[PUBLICATOR ALERTS]Me ha llegado una alerta de latencia y packet loss            \n")#Faltan packetloss y jitter
-			client_mqtt.publish('alertas', 'Me ha llegado una alerta de latencia y packet loss')
-			#print(f"[PUBLICATOR ALERTS]Me ha llegado una alerta de latencia y packet loss            ")#Faltan packetloss y jitter
-		elif q4s_node.latency_combined > LATENCY_ALERT:
-			print("[PUBLICATOR ALERTS]Me ha llegado una alerta por latencia                     ")
-			client_mqtt.publish('alertas', 'Me ha llegado una alerta por latencia')
-		elif q4s_node.packet_loss_combined > PACKET_LOSS_ALERT:
-			print("[PUBLICATOR ALERTS]Me ha llegado una alerta por packet loss                 ")
-			client_mqtt.publish('alertas', 'Me ha llegado una alerta por packet loss')
-		time.sleep(PUBLICATION_ALERT_TIME)
-	print("\nFinished alert publication you must relaunch the program\nPress 0 to exit\n")
+    #print(f"Debug - connection: {connection_alert}, latency: {latency_alert}, packet_loss: {packet_loss_alert}, alert_code: {alert_code}")
+    
+    return alert_code
+
+def alert_publicator(q4s_node):
+    global publicator_alive
+    while publicator_alive:
+        q4s_node.event_publicator.wait()
+        q4s_node.event_publicator.clear()
+        alert_code = check_alert(q4s_node)
+        print(f"\n[PUBLICATOR ALERTS] Alerta con codigo {alert_code}")
+        client_mqtt.publish('alertas', f'Me ha llegado una alerta con codigo {alert_code}')
+    print("\nFinished alert publication you must relaunch the program\nPress 0 to exit\n")
 
 def measures_publicator(q4s_node):
     global publicator_alive

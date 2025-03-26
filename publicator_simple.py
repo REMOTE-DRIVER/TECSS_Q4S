@@ -41,7 +41,7 @@ def check_alert(q4s_node):
     
     alert_code = (connection_alert << 2) | (latency_alert << 1) | packet_loss_alert
 
-    print(f"Debug - connection: {connection_alert}, latency: {latency_alert}, packet_loss: {packet_loss_alert}, alert_code: {alert_code}")
+    #print(f"Debug - connection: {connection_alert}, latency: {latency_alert}, packet_loss: {packet_loss_alert}, alert_code: {alert_code}")
     
     return alert_code
 
@@ -52,7 +52,7 @@ def alert_publicator(q4s_node):
         q4s_node.event_publicator.wait()
         q4s_node.event_publicator.clear()
         alert_code = check_alert(q4s_node)
-        print(f"[PUBLICATOR ALERTS] Alerta con codigo {alert_code}")
+        print(f"\n[PUBLICATOR ALERTS] Alerta con codigo {alert_code}")
     print("\nFinished alert publication you must relaunch the program\nPress 0 to exit\n")
 
 def measures_publicator(q4s_node):

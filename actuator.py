@@ -166,13 +166,13 @@ def actuator(q4s_node):
                     actuator_noise_mode = False
             
             #Paso 2: Esperamos:si llega alerta, vamos a estado 1, si no llega nos quedamos en el estado 0
-            alert_received_during_sleep = q4s_node.event.wait(timeout = tiempo_espera)
+            alert_received_during_sleep = q4s_node.event_actuator.wait(timeout = tiempo_espera)
             if alert_received_during_sleep == False:
                 print("\n    [ACTUATOR (0)]: Sin alertas un tramo de paquetes todo bien\n")
                 state=0
                 continue
             else:
-                q4s_node.event.clear()
+                q4s_node.event_actuator.clear()
                 print("\n    [ACTUATOR (0)]: He recibido alerta, paso a estado 1\n")
                 #if check_alert_valid(q4s_node) == True:
                 print(f"\n[ACTUATOR]{datetime.now().strftime("%H:%M:%S.%f")[:-3]} Me ha llegado una alerta por packet loss\n\tcliente: {q4s_node.packet_loss_up}\n\tserver: {q4s_node.packet_loss_down}\n\tcombinado: {q4s_node.packet_loss_combined}")
@@ -221,14 +221,14 @@ def actuator(q4s_node):
             #    actuator_latency_alert = False  
             
             #Paso 1: te duermes esperando una alerta 
-            alert_received_during_sleep = q4s_node.event.wait(timeout = tiempo_espera)
+            alert_received_during_sleep = q4s_node.event_actuator.wait(timeout = tiempo_espera)
             if alert_received_during_sleep == False:
                 print("\n    [ACTUATOR (1)]: Sin alertas durante un tramo, vuelvo a estado 0\n")
                 consecutive_alerts = 0 
                 state = 0 
                 continue
             else:
-                q4s_node.event.clear()
+                q4s_node.event_actuator.clear()
                 #if check_alert_valid(q4s_node) == True:
                 after_alert_packet_loss = q4s_node.packet_loss_combined
                 print("\n    [ACTUATOR (1)]: Alerta durante el sueño, la trato\n")
