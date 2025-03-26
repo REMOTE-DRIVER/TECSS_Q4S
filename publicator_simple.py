@@ -52,7 +52,7 @@ def alert_publicator(q4s_node):
         q4s_node.event_publicator.wait()
         q4s_node.event_publicator.clear()
         alert_code = check_alert(q4s_node)
-        print(f"\n[PUBLICATOR ALERTS] Alerta con codigo {alert_code}")
+        print(f"\n[PUBLICATOR ALERTS] Alerta con codigo {alert_code}:{q4s_node.latency_combined} {q4s_node.packet_loss_combined} {q4s_node.connection_errors}")
     print("\nFinished alert publication you must relaunch the program\nPress 0 to exit\n")
 
 def measures_publicator(q4s_node):

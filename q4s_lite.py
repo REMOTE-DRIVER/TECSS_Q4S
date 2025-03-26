@@ -527,13 +527,14 @@ class q4s_lite_node():
 
             except KeyboardInterrupt:
                 self.measuring=False
-            except socket.timeout:
+            #except socket.timeout:
                 #self.measuring = False
                 #self.running = False
                 #self.event.set()
-                print("\nConection timeout")
-                continue
-            except ConnectionResetError as e:
+                #print("\nConection timeout")
+                #continue
+            #except ConnectionResetError as e:
+            except (ConnectionResetError,socket.timeout):
                 #No esta levantado el otro extremo
                 if time.perf_counter()-self.state[2]>=KEEP_ALERT_TIME_PUBLICATOR:
                     self.state[0] = "alert"
@@ -543,7 +544,7 @@ class q4s_lite_node():
                     first_connection_error_time = time.perf_counter()                    
                     #print("\n")
                 self.connection_errors+=1
-                print(f"Conection errors in last {CONNECTION_ERROR_TIME_MARGIN} second: {self.connection_errors}\t\t\t\t\t\t", end="\r") 
+                #print(f"Conection errors in last {CONNECTION_ERROR_TIME_MARGIN} second: {self.connection_errors}\t\t\t\t\t\t", end="\r") 
                 if time.perf_counter()-first_connection_error_time >= CONNECTION_ERROR_TIME_MARGIN:
                     self.connection_errors = 0
                 continue
@@ -592,12 +593,13 @@ class q4s_lite_node():
                     print(f"[NEGOTIATION PHASE] WARNING: Latency alerts during negotiation: {self.negotiation_latency_alert} Packet loss alerts during negotiation: {self.negotiation_packet_loss_alert}")
                 #Puedes continuar con la medicion'''
                 
-            self.socket.settimeout(1)#un segundo antes de perdida de conex, mejor valor 360ms, podria ser una vble global, o a fuego por precaucion
+            socket_timeout = TIME_BETWEEN_PINGS+0.01
+            self.socket.settimeout(socket_timeout)#un segundo antes de perdida de conex, mejor valor 360ms, podria ser una vble global, o a fuego por precaucion
             
             self.hilo_rcv = threading.Thread(target=self.measurement_receive_message, daemon=True, name="hilo_rcv")
             self.hilo_snd = threading.Thread(target=self.measurement_send_ping, daemon=True, name="hilo_snd")
             
-            self.state=["normal",time.time(),time.time()]
+            self.state=["normal",time.perf_counter(),time.perf_counter()]
             self.measuring = True
             if self.role=="server":
                 self.hilo_rcv.start()
