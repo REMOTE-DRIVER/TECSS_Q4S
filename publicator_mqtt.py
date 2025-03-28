@@ -71,7 +71,7 @@ def alert_publicator(q4s_node):
 def measures_publicator(q4s_node):
     global publicator_alive
     while publicator_alive:
-        print(f"[PUBLICATOR] Measures Latency:{q4s_node.latency_combined:.10f} Packet_loss: {q4s_node.packet_loss_combined:.3f}")
+        print(f"[PUBLICATOR] Measures Latency:{q4s_node.latency_combined:.10f} Packet_loss: {q4s_node.packet_loss_combined:.3f} Jitter: {q4s_node.jitter_combined:.3f} Connection errors: {q4s_node.connection_errors}")
         client_mqtt.publish('medidas', f"Measures Latency:{q4s_node.latency_combined:.10f} Packet_loss: {q4s_node.packet_loss_combined:.3f}")
         time.sleep(PUBLICATION_TIME)
 
