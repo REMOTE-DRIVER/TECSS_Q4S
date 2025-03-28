@@ -548,6 +548,7 @@ class q4s_lite_node():
                     self.state[0] = "alert"
                     self.state[2] = time.perf_counter()
                     self.event_publicator.set()#El primer error de conexion emite una alerta
+                    print("[ALERT] CONNECTION ERROR")
                 if self.connection_errors == 0:
                     first_connection_error_time = time.perf_counter()                    
                     #print("\n")
