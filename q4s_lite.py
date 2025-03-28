@@ -28,10 +28,12 @@ resp_message = "RESP".encode(MSG_FORMAT)
 disc_message = "DISC".encode(MSG_FORMAT)
 reset_message = "RST".ljust(4).encode(MSG_FORMAT)
 
+
+VEHICLE_ID = "0000"
+
 NEGOTIATION_TIME = 5 #Dependera de lo que tarde en limpiarse una ventana de packet loss
 
 PACKETS_PER_SECOND = 30 
-
 
 PACKET_LOSS_PRECISSION = 100 #Precision de los paquetes perdidos
 LATENCY_ALERT = 295 #milisegundos
@@ -93,7 +95,9 @@ class q4s_lite_node():
 
     def __init__(self, role, address, port, target_address, target_port, event_publicator=None,event_actuator=None):
         #El rol importa para iniciar conex o medir up/down
-        self.role = role 
+        self.role = role
+        #id del flujo a medir
+        self.flow_id = 0 
         #udp socket params
         self.address = address
         self.port = port
@@ -153,6 +157,8 @@ class q4s_lite_node():
             if "SYN" in message_type:
                 for i in range(3):
                     logger.info(f"[INIT CONNECTION] SERVER: Received connexion attempt")
+                    self.flow_id = data_rcvd[1]
+                    logger.info(f"[INIT CONNECTION] SERVER: Vehicle id: {self.flow_id}")
                     #Responde al syn con ack
                     packet_data=(ack_message,0,time.time(),0.0,0.0,0.0,0.0,0.0,0.0)
                     datos = struct.pack(PACKET_FORMAT,*packet_data)
@@ -178,12 +184,14 @@ class q4s_lite_node():
 
     def init_connection_client(self):
         logger.info("[INIT CONNECTION] CLIENT: Starting connection")
+        self.flow_id = encode_identifier(VEHICLE_ID) #Lo coge de un fichero
+        logger.info(f"[INIT CONNECTION] CLIENT: Vehicle id: {self.flow_id}")
         retries = 0
         self.socket.settimeout(3)
         timestamp=time.time()
         while retries < 3:
             try:
-                packet_data=(syn_message,0,time.time(),0.0,0.0,0.0,0.0,0.0,0.0)
+                packet_data=(syn_message,self.flow_id,time.time(),0.0,0.0,0.0,0.0,0.0,0.0)
                 datos = struct.pack(PACKET_FORMAT,*packet_data)
                 self.socket.sendto(datos,self.target_address)
 
@@ -613,6 +621,15 @@ class q4s_lite_node():
         else:
             self.running=False
             print("Conexion fallida")
+
+def encode_identifier(identifier: str) -> int:
+    if len(identifier) != 4:
+        raise ValueError("El identificador debe tener exactamente 4 caracteres")
+    return int.from_bytes(identifier.encode('utf-8'), byteorder='big')
+
+def decode_identifier(number: int) -> str:
+    return number.to_bytes(4, byteorder='big').decode('utf-8')
+
 
 
 if __name__=="__main__":

@@ -37,6 +37,15 @@ client_handler.setFormatter(formatter)
 LATENCY_ALERT = q4s_lite.LATENCY_ALERT#360 #milisegundos
 PACKET_LOSS_ALERT = q4s_lite.PACKET_LOSS_ALERT#0.1#0.02 #2%
 
+def encode_identifier(identifier: str) -> int:
+    if len(identifier) != 4:
+        raise ValueError("El identificador debe tener exactamente 4 caracteres")
+    return int.from_bytes(identifier.encode('utf-8'), byteorder='big')
+
+def decode_identifier(number: int) -> str:
+    return number.to_bytes(4, byteorder='big').decode('utf-8')
+
+
 def check_alert(q4s_node):
     '''Esta funcion comprueba el origen de la alerta y lo devuelve
     perdida conexion, latencia, perdida paquetes, Resultado funcion
@@ -71,7 +80,7 @@ def alert_publicator(q4s_node):
 def measures_publicator(q4s_node):
     global publicator_alive
     while publicator_alive:
-        print(f"[PUBLICATOR] Measures Latency:{q4s_node.latency_combined:.10f} Packet_loss: {q4s_node.packet_loss_combined:.3f} Jitter: {q4s_node.jitter_combined:.3f} Connection errors: {q4s_node.connection_errors}")
+        print(f"[PUBLICATOR] Vehicle id = {decode_identifier(q4s_node.flow_id)} Measures Latency:{q4s_node.latency_combined:.10f} Packet_loss: {q4s_node.packet_loss_combined:.3f} Jitter: {q4s_node.jitter_combined:.3f} Connection errors: {q4s_node.connection_errors}")
         client_mqtt.publish('medidas', f"Measures Latency:{q4s_node.latency_combined:.10f} Packet_loss: {q4s_node.packet_loss_combined:.3f}")
         time.sleep(PUBLICATION_TIME)
 
