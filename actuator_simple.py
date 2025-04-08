@@ -85,7 +85,8 @@ def main():
         print("\n1: Menu Pérdidas")
         print("2: Menu Peticiones")
         print("0: Salir")
-        option = input("\nElige una opción: ")
+        print("\nElige una opción: \n")
+        option = input() 
 
         if option == '0':  # Mata el actuador y los hilos del cliente q4s
             actuator_alive = False
@@ -102,7 +103,8 @@ def main():
                 print("3: Pierde un 10 por ciento de paquetes")
                 print("4: No pierdas paquetes")
                 print("0: Atrás")
-                sub_option = input("Elige una opción: ")
+                print("\nElige una opción: \n")
+                sub_option = input()
 
                 if sub_option == '0':
                     break

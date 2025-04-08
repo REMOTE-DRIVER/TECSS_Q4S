@@ -36,7 +36,7 @@ NEGOTIATION_TIME = 5 #Dependera de lo que tarde en limpiarse una ventana de pack
 PACKETS_PER_SECOND = 30 
 
 PACKET_LOSS_PRECISSION = 100 #Precision de los paquetes perdidos
-LATENCY_ALERT = 295 #milisegundos
+LATENCY_ALERT = 20 #milisegundos
 PACKET_LOSS_ALERT = 0.02 #tanto por 1
 KEEP_ALERT_TIME = (PACKET_LOSS_PRECISSION / PACKETS_PER_SECOND) #segundos que estas en estado de alerta a partir del cual vuelve a avisar al actuador, para no avisarle en todos los paquetes
 KEEP_ALERT_TIME_PUBLICATOR = 1
@@ -453,7 +453,7 @@ class q4s_lite_node():
                     self.state[2]=time.perf_counter()
                 self.event_publicator.set() #Al publicador le interesan todas las alertas, al actuador solo packet loss
                 logger.debug(f"[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
-                #print(f"\n[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
+                print(f"\n[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
         elif self.state[0]=="alert":
             if alert_packet_loss:
                 if time.perf_counter()-self.state[1]>=KEEP_ALERT_TIME:
@@ -463,7 +463,7 @@ class q4s_lite_node():
                     self.event_actuator.set()
                     self.event_publicator.set()
                     logger.debug(f"[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
-                    #print(f"[ALERT] PACKET LOSS ALERT {self.state}")
+                    print(f"\n[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
             elif alert_latency:
                 if time.perf_counter()-self.state[2]>=KEEP_ALERT_TIME_PUBLICATOR:
                     #self.state="alert",time.perf_counter()
@@ -471,7 +471,7 @@ class q4s_lite_node():
                     self.state[2] = time.perf_counter()
                     self.event_publicator.set()
                     logger.debug(f"[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
-                    #print("[ALERT] LATENCY ALERT ")
+                    print(f"\n[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
             else:
                 self.state[0]="normal"
                 self.state[1]=time.perf_counter()
@@ -548,6 +548,7 @@ class q4s_lite_node():
                     self.state[0] = "alert"
                     self.state[2] = time.perf_counter()
                     self.event_publicator.set()#El primer error de conexion emite una alerta
+                    print()
                     print("[ALERT] CONNECTION ERROR")
                 if self.connection_errors == 0:
                     first_connection_error_time = time.perf_counter()                    
@@ -602,7 +603,7 @@ class q4s_lite_node():
                     print(f"[NEGOTIATION PHASE] WARNING: Latency alerts during negotiation: {self.negotiation_latency_alert} Packet loss alerts during negotiation: {self.negotiation_packet_loss_alert}")
                 #Puedes continuar con la medicion'''
                 
-            socket_timeout = TIME_BETWEEN_PINGS+0.01
+            socket_timeout = 0.5 # TIME_BETWEEN_PINGS+0.01
             self.socket.settimeout(socket_timeout)#un segundo antes de perdida de conex, mejor valor 360ms, podria ser una vble global, o a fuego por precaucion
             
             self.hilo_rcv = threading.Thread(target=self.measurement_receive_message, daemon=True, name="hilo_rcv")
@@ -651,7 +652,8 @@ if __name__=="__main__":
                     print("\n1: Pierde un 10 por ciento mas de paquetes")
                     print("2: No pierdas paquetes")
                     print("0: Atrás")
-                    sub_option = input("Elige una opción: \n")
+                    print("\nElige una opción: \n")
+                    sub_option = input()                   
 
                     if sub_option == '0':
                         break
@@ -681,7 +683,8 @@ if __name__=="__main__":
                     print("\n1: Pierde un 10 por ciento mas de paquetes")
                     print("2: No pierdas paquetes")
                     print("0: Atrás")
-                    sub_option = input("Elige una opción: \n")
+                    print("\nElige una opción: \n")
+                    sub_option = input() 
 
                     if sub_option == '0':
                         break

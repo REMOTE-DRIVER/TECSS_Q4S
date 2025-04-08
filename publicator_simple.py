@@ -93,7 +93,8 @@ def main():
             print("4: deja de perder paquetes")
             #print("5: restart publicator")
             print("0: Salir")
-            option = input("\nElige una opcion\n")
+            print("\nElige una opción: \n")
+            option = input() 
             if option == '0':#Mata el actuador y los hilos del cliente q4s
                 publicator_alive=False
                 #publicator_thread.join()
@@ -122,7 +123,7 @@ def main():
                 main()'''
                 
 
-    print("EXIT")
+    print("Saliendo...")
 
 if __name__=="__main__":
     main()

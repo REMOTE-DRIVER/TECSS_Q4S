@@ -20,8 +20,8 @@ username = "nokiatecss"
 with open("password.txt", "r") as file:
     password = file.read().strip()
 
-client_mqtt = mqtt.Client()
-client_mqtt.username_pw_set(username, password)
+# client_mqtt = mqtt.Client()
+# client_mqtt.username_pw_set(username, password)
 
 PUBLICATION_TIME = 3 #segundos
 PUBLICATION_ALERT_TIME = 1 #segundo
@@ -67,79 +67,121 @@ def check_alert(q4s_node):
     
     return alert_code
 
-def alert_publicator(q4s_node):
+def alert_publicator(q4s_node, client_mqtt):
     global publicator_alive
     while publicator_alive:
         q4s_node.event_publicator.wait()
         q4s_node.event_publicator.clear()
         alert_code = check_alert(q4s_node)
-        print(f"\n[PUBLICATOR ALERTS] Alerta con codigo {alert_code}")
+        print(f"\n[PUBLICATOR ALERTS] Alerta con codigo {alert_code}\n")
         client_mqtt.publish('alertas', f'Me ha llegado una alerta con codigo {alert_code}')
+        # client_mqtt.publish(f"RD/{decode_identifier(q4s_node.flow_id)}/QoS_alert", f"{alert_code};{alert_code};lat={q4s_node.latency_combined:.10f};pl={q4s_node.packet_loss_combined:.3f};jitter={q4s_node.jitter_combined:.3f};pc={q4s_node.connection_errors}")
     print("\nFinished alert publication you must relaunch the program\nPress 0 to exit\n")
 
-def measures_publicator(q4s_node):
+def measures_publicator(q4s_node, client_mqtt):
     global publicator_alive
     while publicator_alive:
+        print()
         print(f"[PUBLICATOR] Vehicle id = {decode_identifier(q4s_node.flow_id)} Measures Latency:{q4s_node.latency_combined:.10f} Packet_loss: {q4s_node.packet_loss_combined:.3f} Jitter: {q4s_node.jitter_combined:.3f} Connection errors: {q4s_node.connection_errors}")
-        client_mqtt.publish('medidas', f"Measures Latency:{q4s_node.latency_combined:.10f} Packet_loss: {q4s_node.packet_loss_combined:.3f}")
+        client_mqtt.publish('medidas', f"Latency:{q4s_node.latency_combined:.10f} Packet_loss: {q4s_node.packet_loss_combined:.3f} Jitter: {q4s_node.jitter_combined:.3f} Connection errors: {q4s_node.connection_errors}")
+        # client_mqtt.publish(f"RD/{decode_identifier(q4s_node.flow_id)}/QoS_status", f"lat={q4s_node.latency_combined:.10f};pl={q4s_node.packet_loss_combined:.3f};jitter={q4s_node.jitter_combined:.3f};pc={q4s_node.connection_errors}")
         time.sleep(PUBLICATION_TIME)
+
+def on_connect(client, userdata, flags, reason_code, properties):
+    if flags.session_present:
+        # Si la sesión está presente
+        print("Session Present")
+    if reason_code == 0:
+        # Conexión exitosa
+        print("Conexión exitosa")
+    else:
+        # Error en la conexión
+        print(f"Error en la conexión con el código: {reason_code}")
+
+def on_disconnect(client, userdata, flags, reason_code, properties):
+    if reason_code == 0:
+        # Desconexión exitosa
+        print("Desconexión exitosa")
+    else:
+        # Error en la desconexión
+        print(f"Error en la desconexión con el código: {reason_code}")
 
 
 def main():
-	global publicator_alive
-	logger.addHandler(client_handler)
-	#El actuador es el server por defecto, ya que va en el proxy de video
-	q4s_node = q4s_lite.q4s_lite_node("server", server_address, server_port,client_address, client_port,event)
-	q4s_node.run()
-	client_mqtt.connect(mqtt_host, mqtt_port)
-	publicator_alive = True
-	alert_publicator_thread = threading.Thread(target=alert_publicator,args=(q4s_node,),daemon=True)
-	alert_publicator_thread.start()
-	measures_publicator_thread = threading.Thread(target=measures_publicator,args=(q4s_node,),daemon=True)
-	measures_publicator_thread.start()
+    global publicator_alive
+    logger.addHandler(client_handler)
 
-	#main_thread_alive = True
-	
-	while True:
-			#time.sleep(0.1)
-			print("")
-			print("1: empeora latencia")
-			print("2: mejora latencia")
-			print("3: pierde un 10 por ciento de paquetes")
-			print("4: deja de perder paquetes")
-			#print("5: restart publicator")
-			print("0: Salir")
-			option = input("\nElige una opcion\n")
-			if option == '0':#Mata el actuador y los hilos del cliente q4s
-				publicator_alive=False
-				#publicator_thread.join()
-				q4s_node.running=False
-				q4s_node.measuring=False
-				q4s_node.hilo_snd.join()
-				q4s_node.hilo_rcv.join()
-				client_mqtt.disconnect()
-				break
-			elif option == '1':
-				q4s_node.latency_decoration+=0.1
-			elif option == '2':
-				q4s_node.latency_decoration=0
-			elif option == '3':
-				q4s_node.packet_loss_decoration=0.8
-				print(f"Packet_loss_decoration =  {q4s_node.packet_loss_decoration}")
-			elif option == '4':
-				q4s_node.packet_loss_decoration=0
-			'''elif option == '5':#Opcion desactivada
-				publicator_alive=False
-				#publicator_thread.join()
-				q4s_node.running=False
-				q4s_node.measuring=False
-				q4s_node.hilo_snd.join()
-				q4s_node.hilo_rcv.join()
-				publicator_thread.join()
-				main()'''
-				
+    #El actuador es el server por defecto, ya que va en el proxy de video
+    q4s_node = q4s_lite.q4s_lite_node("server", server_address, server_port,client_address, client_port,event)
+    q4s_node.run()
 
-	print("EXIT")
+    print(f"client_id = q4s_{decode_identifier(q4s_node.flow_id)}")
+    client_id = f"q4s_{decode_identifier(q4s_node.flow_id)}"  # Usando flow_id como parte del client_id
+    client_mqtt = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id, clean_session=False)
+    client_mqtt.username_pw_set(username, password)
+
+    # client_mqtt.connect(mqtt_host, mqtt_port)
+    # Conectar al servidor MQTT y manejar errores
+    try:
+        client_mqtt.on_connect = on_connect
+        client_mqtt.on_disconnect = on_disconnect
+        client_mqtt.connect(mqtt_host, mqtt_port, 60)
+        client_mqtt.loop_start()  # Inicia el bucle en segundo plano para manejar mensajes
+    except Exception as e:
+        print(f"Error al conectar al broker MQTT: {e}")
+        return  # Detenemos la ejecución si la conexión no es exitosa
+
+    publicator_alive = True
+    alert_publicator_thread = threading.Thread(target=alert_publicator,args=(q4s_node,client_mqtt,),daemon=True)
+    alert_publicator_thread.start()
+    measures_publicator_thread = threading.Thread(target=measures_publicator,args=(q4s_node,client_mqtt,),daemon=True)
+    measures_publicator_thread.start()
+
+    #main_thread_alive = True
+    
+    while True:
+            #time.sleep(0.1)
+            print("")
+            print("1: empeora latencia")
+            print("2: mejora latencia")
+            print("3: pierde un 10 por ciento de paquetes")
+            print("4: deja de perder paquetes")
+            #print("5: restart publicator")
+            print("0: Salir")
+            print("\nElige una opción: \n")
+            option = input() 
+            if option == '0':#Mata el actuador y los hilos del cliente q4s
+                publicator_alive = False
+                # Detener los hilos de publicación de alertas y medidas de manera segura
+                alert_publicator_thread.join()
+                measures_publicator_thread.join()
+                q4s_node.running = False
+                q4s_node.measuring = False
+                q4s_node.hilo_snd.join()
+                q4s_node.hilo_rcv.join()
+                client_mqtt.disconnect()  # Desconectar MQTT de manera segura
+                break  # Salir del bucle principal
+            elif option == '1':
+                q4s_node.latency_decoration+=0.1
+            elif option == '2':
+                q4s_node.latency_decoration=0
+            elif option == '3':
+                q4s_node.packet_loss_decoration=0.8
+                print(f"Packet_loss_decoration =  {q4s_node.packet_loss_decoration}")
+            elif option == '4':
+                q4s_node.packet_loss_decoration=0
+            '''elif option == '5':#Opcion desactivada
+                publicator_alive=False
+                #publicator_thread.join()
+                q4s_node.running=False
+                q4s_node.measuring=False
+                q4s_node.hilo_snd.join()
+                q4s_node.hilo_rcv.join()
+                publicator_thread.join()
+                main()'''
+                
+
+    print("Saliendo...")
 
 if __name__=="__main__":
-	main()
+    main()
