@@ -453,7 +453,7 @@ class q4s_lite_node():
         else:
             init = -1
         if init == 0:                
-            socket_timeout = 0.5 # TIME_BETWEEN_PINGS+0.01
+            socket_timeout = 1 # TIME_BETWEEN_PINGS+0.01
             self.socket.settimeout(socket_timeout)#un segundo antes de perdida de conex, mejor valor 360ms, podria ser una vble global, o a fuego por precaucion
             
             self.hilo_rcv = threading.Thread(target=self.measurement_receive_message, daemon=True, name="hilo_rcv")
