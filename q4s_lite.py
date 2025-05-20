@@ -14,6 +14,60 @@ import sys,os
 import logging
 import functools
 import random
+import configparser
+
+# Valores por defecto
+DEFAULTS = {
+    'GENERAL': {
+        'VEHICLE_ID': "0001",
+        'PACKETS_PER_SECOND': 30,
+        'PACKET_LOSS_PRECISSION': 100,
+        'LATENCY_ALERT': 20,
+        'PACKET_LOSS_ALERT': 0.02,
+    },
+    'NETWORK': {
+        'server_address': '127.0.0.1',
+        'server_port': 20001,
+        'client_address': '127.0.0.1',
+        'client_port': 20002,
+    }
+}
+
+config = configparser.ConfigParser()
+
+# Leer el archivo
+config.read_dict(DEFAULTS)  # cargar valores por defecto primero
+config.read("q4s_lite_config.ini")      # luego sobrescribir con lo del fichero si existe
+
+# Acceder y convertir tipos
+general = config['GENERAL']
+network = config['NETWORK']
+
+VEHICLE_ID= general.get('VEHICLE_ID')#.strip('"')
+PACKETS_PER_SECOND= general.getint('PACKETS_PER_SECOND')
+PACKET_LOSS_PRECISSION= general.getint('PACKET_LOSS_PRECISSION')
+LATENCY_ALERT= general.getint('LATENCY_ALERT')
+PACKET_LOSS_ALERT= general.getfloat('PACKET_LOSS_ALERT')
+server_address= network.get('server_address')
+server_port= network.getint('server_port')
+client_address= network.get('client_address')
+client_port= network.getint('client_port')
+
+print('Q4s_lite Config params')
+print("======================")
+print(f"VEHICLE_ID = {VEHICLE_ID}")
+print(f"PACKETS_PER_SECOND = {PACKETS_PER_SECOND}")
+print(f"PACKET_LOSS_PRECISSION = {PACKET_LOSS_PRECISSION}")
+print(f"LATENCY_ALERT = {LATENCY_ALERT}")
+print(f"PACKET_LOSS_ALERT = {PACKET_LOSS_ALERT}")
+print(f"server_address,server_port = {server_address},{server_port}")
+print(f"client_address,client_port = {client_address},{client_port}")
+
+print("\nQ4s_lite Execution")
+print("======================")
+
+
+
 
 #Paquete con tipo_mensaje,num secuencia, timestamp, latencia_up/down, jitter_up/down, packet_loss_up/down 
 #Tipos de mensaje: SYN, ACK, PING, RESP, DISC
@@ -29,23 +83,16 @@ disc_message = "DISC".encode(MSG_FORMAT)
 reset_message = "RST".ljust(4).encode(MSG_FORMAT)
 
 
-VEHICLE_ID = "0000"
+#VEHICLE_ID = "0000"
 
-NEGOTIATION_TIME = 5 #Dependera de lo que tarde en limpiarse una ventana de packet loss
+#PACKETS_PER_SECOND = 30 
 
-PACKETS_PER_SECOND = 30 
-
-PACKET_LOSS_PRECISSION = 100 #Precision de los paquetes perdidos
-LATENCY_ALERT = 20 #milisegundos
-PACKET_LOSS_ALERT = 0.02 #tanto por 1
-KEEP_ALERT_TIME = (PACKET_LOSS_PRECISSION / PACKETS_PER_SECOND) #segundos que estas en estado de alerta a partir del cual vuelve a avisar al actuador, para no avisarle en todos los paquetes
+#PACKET_LOSS_PRECISSION = 100 #Precision de los paquetes perdidos
+#LATENCY_ALERT = 20 #milisegundos
+#PACKET_LOSS_ALERT = 0.02 #tanto por 1
+KEEP_ALERT_TIME = max(1,(PACKET_LOSS_PRECISSION / PACKETS_PER_SECOND)) #segundos que estas en estado de alerta a partir del cual vuelve a avisar al actuador, para no avisarle en todos los paquetes
 KEEP_ALERT_TIME_PUBLICATOR = 1
-#deberia ser lo que tardas en que pase la ventana de packet_loss
 print(f"KEEP_ALERT_TIME={KEEP_ALERT_TIME}")
-#Estrategias de combinacion de latencia_OLD
-#SMOOTHING_PARAM = 20#segun la estrategia, es el parametro n o alfa (numero de paquetes hasta latencia maxima, o factor de suavizado)
-#TIME_TO_GET_LATENCY = 1#Segundos hasta llegar a la latencia real
-#TIME_BETWEEN_PINGS = 1/(SMOOTHING_PARAM*TIME_TO_GET_LATENCY)
 
 #Nueva latencia
 LATENCY_CHECKPOINT = [3,5,7,9]# definen crecimiento y diferencia de latencia, jj recomienda de 3,4,5,6
@@ -65,8 +112,8 @@ COMBINED_FUNC = MEASURE_COMBINATIONS[MEASURE_COMBINATION_STRATEGY]
 #Tiempo en segundos para medir los errores de conexion
 CONNECTION_ERROR_TIME_MARGIN = 1
 
-server_address, server_port = "127.0.0.1",20001
-client_address, client_port = "127.0.0.1",20002
+#server_address, server_port = "127.0.0.1",20001
+#client_address, client_port = "127.0.0.1",20002
 #server_address, server_port = "192.168.1.113", 20001
 #client_address, client_port = "192.168.1.50", 20002
 
@@ -476,7 +523,7 @@ class q4s_lite_node():
 
 def encode_identifier(identifier: str) -> int:
     if len(identifier) != 4:
-        raise ValueError("El identificador debe tener exactamente 4 caracteres")
+        raise ValueError(f"El identificador debe tener exactamente 4 caracteresy tiene {len(identifier)}")
     return int.from_bytes(identifier.encode('utf-8'), byteorder='big')
 
 def decode_identifier(number: int) -> str:
