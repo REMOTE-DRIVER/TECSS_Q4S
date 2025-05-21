@@ -83,6 +83,7 @@ disc_message = "DISC".encode(MSG_FORMAT)
 reset_message = "RST".ljust(4).encode(MSG_FORMAT)
 
 INIT_CONNECTION_TRIES = 10
+MODO_STANDALONE = False  #Para indicar que se ejecuta como libreria, solo se pone a true si se ejecuta desde este modulo
 #VEHICLE_ID = "0000"
 
 #PACKETS_PER_SECOND = 30 
@@ -389,7 +390,7 @@ class q4s_lite_node():
                     self.state[2]=time.perf_counter()
                 self.event_publicator.set() #Al publicador le interesan todas las alertas, al actuador solo packet loss
                 logger.debug(f"[ALERT]:  Vehicle_id: {flow_id} Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
-                print(f"\n[ALERT]: Vehicle_id: {flow_id} Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
+                printalert(f"\n[ALERT]: Vehicle_id: {flow_id} Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
         elif self.state[0]=="alert":
             if alert_packet_loss:
                 if time.perf_counter()-self.state[1]>=KEEP_ALERT_TIME:
@@ -399,7 +400,7 @@ class q4s_lite_node():
                     self.event_actuator.set()
                     self.event_publicator.set()
                     logger.debug(f"[ALERT]:  Vehicle_id: {flow_id} Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
-                    print(f"\n[ALERT]:   Vehicle_id: {flow_id}Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
+                    printalert(f"\n[ALERT]:   Vehicle_id: {flow_id}Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
             elif alert_latency:
                 if time.perf_counter()-self.state[2]>=KEEP_ALERT_TIME_PUBLICATOR:
                     #self.state="alert",time.perf_counter()
@@ -407,7 +408,7 @@ class q4s_lite_node():
                     self.state[2] = time.perf_counter()
                     self.event_publicator.set()
                     logger.debug(f"[ALERT]:  Vehicle_id: {flow_id} Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
-                    print(f"\n[ALERT]:  Vehicle_id: {flow_id} Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
+                    printalert(f"\n[ALERT]:  Vehicle_id: {flow_id} Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
             else:
                 self.state[0]="normal"
                 self.state[1]=time.perf_counter()
@@ -473,7 +474,7 @@ class q4s_lite_node():
                     self.state[2] = time.perf_counter()
                     self.event_publicator.set()#El primer error de conexion emite una alerta
                     print()
-                    print(f"[ALERT] CONNECTION ERROR Vehicle_id: {unpacked_data[9]}")
+                    printalert(f"[ALERT] CONNECTION ERROR Vehicle_id: {unpacked_data[9]}")
                 if self.connection_errors == 0:
                     first_connection_error_time = time.perf_counter()                    
                     #print("\n")
@@ -531,11 +532,14 @@ def encode_identifier(identifier: str) -> int:
 def decode_identifier(number: int) -> str:
     return number.to_bytes(4, byteorder='big').decode('utf-8')
 
-
+def printalert(*args, **kwargs):
+    if MODO_STANDALONE:
+        print(*args, **kwargs)
 
 if __name__=="__main__":
     main_run = True
     #os.system('cls' if os.name == 'nt' else 'clear')
+    MODO_STANDALONE = True
     if len(sys.argv)<2:
         print("Usage")
     elif len(sys.argv)==2:
