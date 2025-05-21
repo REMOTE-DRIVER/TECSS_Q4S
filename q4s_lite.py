@@ -82,7 +82,7 @@ resp_message = "RESP".encode(MSG_FORMAT)
 disc_message = "DISC".encode(MSG_FORMAT)
 reset_message = "RST".ljust(4).encode(MSG_FORMAT)
 
-
+INIT_CONNECTION_TRIES = 10
 #VEHICLE_ID = "0000"
 
 #PACKETS_PER_SECOND = 30 
@@ -202,7 +202,7 @@ class q4s_lite_node():
             data_rcvd = struct.unpack(PACKET_FORMAT,data)
             message_type = data_rcvd[0].decode(MSG_FORMAT).strip()
             if "SYN" in message_type:
-                for i in range(3):
+                for i in range(INIT_CONNECTION_TRIES): #while True para que siempre espere
                     logger.info(f"[INIT CONNECTION] SERVER: Received connexion attempt")
                     self.flow_id = data_rcvd[1]
                     logger.info(f"[INIT CONNECTION] SERVER: Vehicle id: {self.flow_id}")
@@ -236,7 +236,7 @@ class q4s_lite_node():
         retries = 0
         self.socket.settimeout(3)
         timestamp=time.time()
-        while retries < 3:
+        while retries < INIT_CONNECTION_TRIES: #while True para que lo intente hasta que pueda
             try:
                 packet_data=(syn_message,self.flow_id,time.time(),0.0,0.0,0.0,0.0,0.0,0.0)
                 datos = struct.pack(PACKET_FORMAT,*packet_data)
@@ -258,7 +258,7 @@ class q4s_lite_node():
                     return 0
             except socket.timeout:
                 retries+=1
-                logger.info(f"[INIT CONNECTION] CLIENT: Timeout, reintentando {retries}/3")
+                logger.info(f"[INIT CONNECTION] CLIENT: Timeout, reintentando {retries}/{INIT_CONNECTION_TRIES}")
             except ConnectionResetError:
                 #Cuando levantas el cliente antes que el server: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
                 continue
