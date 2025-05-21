@@ -71,8 +71,8 @@ print("======================")
 
 #Paquete con tipo_mensaje,num secuencia, timestamp, latencia_up/down, jitter_up/down, packet_loss_up/down 
 #Tipos de mensaje: SYN, ACK, PING, RESP, DISC
-PACKET_FORMAT = ">4sidffffff"  # Formato de los datos
-PACKET_SIZE = 48 #bytes
+PACKET_FORMAT = ">4sidffffffi"  # Formato de los datos
+PACKET_SIZE = 52 #bytes
 
 MSG_FORMAT = 'utf-8'
 ack_message = "ACK".ljust(4).encode(MSG_FORMAT)
@@ -204,10 +204,10 @@ class q4s_lite_node():
             if "SYN" in message_type:
                 for i in range(INIT_CONNECTION_TRIES): #while True para que siempre espere
                     logger.info(f"[INIT CONNECTION] SERVER: Received connexion attempt")
-                    self.flow_id = data_rcvd[1]
+                    self.flow_id = data_rcvd[9]
                     logger.info(f"[INIT CONNECTION] SERVER: Vehicle id: {self.flow_id}")
                     #Responde al syn con ack
-                    packet_data=(ack_message,0,time.time(),0.0,0.0,0.0,0.0,0.0,0.0)
+                    packet_data=(ack_message,0,time.time(),0.0,0.0,0.0,0.0,0.0,0.0,self.flow_id)
                     datos = struct.pack(PACKET_FORMAT,*packet_data)
                     self.socket.sendto(datos,self.target_address)
                     #Ahora espero el ack de vuelta
@@ -238,7 +238,7 @@ class q4s_lite_node():
         timestamp=time.time()
         while retries < INIT_CONNECTION_TRIES: #while True para que lo intente hasta que pueda
             try:
-                packet_data=(syn_message,self.flow_id,time.time(),0.0,0.0,0.0,0.0,0.0,0.0)
+                packet_data=(syn_message,0,time.time(),0.0,0.0,0.0,0.0,0.0,0.0,self.flow_id)
                 datos = struct.pack(PACKET_FORMAT,*packet_data)
                 self.socket.sendto(datos,self.target_address)
 
@@ -248,7 +248,7 @@ class q4s_lite_node():
                 message_type = data_rcvd[0].decode(MSG_FORMAT).strip()
                 if "ACK" in message_type:
                     #Responde ack, se le envia otro ack
-                    packet_data=(ack_message,0,time.time(),0.0,0.0,0.0,0.0,0.0,0.0)
+                    packet_data=(ack_message,0,time.time(),0.0,0.0,0.0,0.0,0.0,0.0,self.flow_id)
                     datos = struct.pack(PACKET_FORMAT,*packet_data)
                     self.socket.sendto(datos,self.target_address)
                     logger.info(f"[INIT CONNECTION] CLIENT: Conexion establecida ha tardado {timestamp_recepcion-timestamp} segundos")
@@ -315,7 +315,8 @@ class q4s_lite_node():
                 self.jitter_up,
                 self.jitter_down,
                 self.packet_loss_up,
-                self.packet_loss_down
+                self.packet_loss_down,
+                self.flow_id
                 )
             packet = struct.pack(PACKET_FORMAT, *packet_data)
             try:
@@ -375,7 +376,7 @@ class q4s_lite_node():
             self.packet_loss_down = data_from_packet[8]
 
     #def check_alert(self,latency,packet_loss,data): #Quito el data porque ya no envio mensaje, lanzo alerta al actuador
-    def check_alert(self,alert_latency,alert_packet_loss):
+    def check_alert(self,alert_latency,alert_packet_loss, flow_id):
         #Se invoca con booleanos si hay alerta, para comprobar si la alerta es nueva o lleva un rato en alerta
         logger.debug(f"ESTADO: {self.state}")
         if self.state[0]=="normal":
@@ -387,8 +388,8 @@ class q4s_lite_node():
                 if alert_latency:
                     self.state[2]=time.perf_counter()
                 self.event_publicator.set() #Al publicador le interesan todas las alertas, al actuador solo packet loss
-                logger.debug(f"[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
-                print(f"\n[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
+                logger.debug(f"[ALERT]:  Vehicle_id: {flow_id} Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
+                print(f"\n[ALERT]: Vehicle_id: {flow_id} Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
         elif self.state[0]=="alert":
             if alert_packet_loss:
                 if time.perf_counter()-self.state[1]>=KEEP_ALERT_TIME:
@@ -397,21 +398,21 @@ class q4s_lite_node():
                     self.state[2] = time.perf_counter()
                     self.event_actuator.set()
                     self.event_publicator.set()
-                    logger.debug(f"[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
-                    print(f"\n[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
+                    logger.debug(f"[ALERT]:  Vehicle_id: {flow_id} Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
+                    print(f"\n[ALERT]:   Vehicle_id: {flow_id}Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
             elif alert_latency:
                 if time.perf_counter()-self.state[2]>=KEEP_ALERT_TIME_PUBLICATOR:
                     #self.state="alert",time.perf_counter()
                     self.state[0]="alert"
                     self.state[2] = time.perf_counter()
                     self.event_publicator.set()
-                    logger.debug(f"[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
-                    print(f"\n[ALERT]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
+                    logger.debug(f"[ALERT]:  Vehicle_id: {flow_id} Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
+                    print(f"\n[ALERT]:  Vehicle_id: {flow_id} Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
             else:
                 self.state[0]="normal"
                 self.state[1]=time.perf_counter()
                 self.state[2]=time.perf_counter()
-                logger.debug(f"[RECOVERY]: Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
+                logger.debug(f"[RECOVERY]:  Vehicle_id: {flow_id} Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
 
 
     def measurement_receive_message(self):
@@ -424,15 +425,16 @@ class q4s_lite_node():
                 timestamp_recepcion = time.perf_counter()
                 unpacked_data = struct.unpack(PACKET_FORMAT, data)
                 message_type = unpacked_data[0].decode(MSG_FORMAT).strip()  # El tipo de mensaje es el primer campo
+                #self.flow_id[identificador_actual] = unpacked_data[9]
                 if message_type == "PING": #PING
                     #if self.latency_decoration > 0:
                     #    time.sleep(self.latency_decoration)
                     self.update_measures(unpacked_data)
-                    logger.debug(f"[MEASURING RECEIVE PING] n_seq:{unpacked_data[1]}: lat_up:{unpacked_data[3]} lat_down:{unpacked_data[4]} jit_up:{unpacked_data[5]} jit_down:{unpacked_data[6]} pl_up:{unpacked_data[7]} pl_down:{unpacked_data[8]}")
+                    logger.debug(f"[MEASURING RECEIVE PING] n_seq:{unpacked_data[1]}: lat_up:{unpacked_data[3]} lat_down:{unpacked_data[4]} jit_up:{unpacked_data[5]} jit_down:{unpacked_data[6]} pl_up:{unpacked_data[7]} pl_down:{unpacked_data[8]} vehicle_id:{unpacked_data[9]}")
                     packet_data = (resp_message,*unpacked_data[1:])#,unpacked_data[1],unpacked_data[2],unpacked_data[3],unpacked_data[4],unpacked_data[5],unpacked_data[6],unpacked_data[7],unpacked_data[8])
                     packet = struct.pack(PACKET_FORMAT, *packet_data)
                     self.socket.sendto(packet,self.target_address)
-                    logger.debug(f"[MEASURING CONTEST RESP] n_seq:{packet_data[1]}: lat_up:{packet_data[3]} lat_down:{packet_data[4]} jit_up:{packet_data[5]} jit_down:{packet_data[6]} pl_up:{packet_data[7]} pl_down:{packet_data[8]}")
+                    logger.debug(f"[MEASURING CONTEST RESP] n_seq:{packet_data[1]}: lat_up:{packet_data[3]} lat_down:{packet_data[4]} jit_up:{packet_data[5]} jit_down:{packet_data[6]} pl_up:{packet_data[7]} pl_down:{packet_data[8]} vehicle_id:{unpacked_data[9]}")
                 elif message_type == "RESP": #RESP
                     #actualizo el packet received                    
                     with self.lock:
@@ -441,7 +443,7 @@ class q4s_lite_node():
                         if self.packets_received[n_seq_actual] == 2:
                             self.total_received += 1 #Dejamos de contabilizar la perdida y sumamos al contador
                         self.packets_received[n_seq_actual] = 0
-                    logger.debug(f"[MEASURING RECEIVE RESP] n_seq:{unpacked_data[1]}: lat_up:{unpacked_data[3]} lat_down:{unpacked_data[4]} jit_up:{unpacked_data[5]} jit_down:{unpacked_data[6]} pl_up:{unpacked_data[7]} pl_down:{unpacked_data[8]}")
+                    logger.debug(f"[MEASURING RECEIVE RESP] n_seq:{unpacked_data[1]}: lat_up:{unpacked_data[3]} lat_down:{unpacked_data[4]} jit_up:{unpacked_data[5]} jit_down:{unpacked_data[6]} pl_up:{unpacked_data[7]} pl_down:{unpacked_data[8]} vehicle_id:{unpacked_data[9]}")
                     
                     if self.role=="server":
                         self.latency_down,self.jitter_down,self.packet_loss_down = self.get_metrics(timestamp_recepcion,unpacked_data[2],self.latency_down,self.total_received)
@@ -457,8 +459,8 @@ class q4s_lite_node():
                     
                     #Posible TODO: Printar y comprobar alertas cada n paquetes, los necesarios para dar una alarma cada SMOOTHING_PARAM Paquetes
                     #mejor llamar mucho y comprobarlo dentro, en caso de fallo llegan pocos recoveries y puedes perder tiempo
-                    print(f"[MEASURING (combined)] Latency:{self.latency_combined:.10f} Packet_loss: {self.packet_loss_combined:.3f} Jitter: {self.jitter_combined:.3f}", end="\r")
-                    self.check_alert(self.latency_combined>=LATENCY_ALERT,self.packet_loss_combined>=PACKET_LOSS_ALERT)
+                    print(f"[MEASURING] Latency:{self.latency_combined:.10f} Packet_loss: {self.packet_loss_combined:.3f} Jitter: {self.jitter_combined:.3f} Vehicle id: {unpacked_data[9]}", end="\r")
+                    self.check_alert(self.latency_combined>=LATENCY_ALERT,self.packet_loss_combined>=PACKET_LOSS_ALERT, unpacked_data[9])
                     #if self.latency_decoration > 0:
                     #    time.sleep(self.latency_decoration)
 
@@ -471,7 +473,7 @@ class q4s_lite_node():
                     self.state[2] = time.perf_counter()
                     self.event_publicator.set()#El primer error de conexion emite una alerta
                     print()
-                    print("[ALERT] CONNECTION ERROR")
+                    print(f"[ALERT] CONNECTION ERROR Vehicle_id: {unpacked_data[9]}")
                 if self.connection_errors == 0:
                     first_connection_error_time = time.perf_counter()                    
                     #print("\n")
