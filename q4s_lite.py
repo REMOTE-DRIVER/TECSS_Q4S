@@ -24,6 +24,7 @@ DEFAULTS = {
         'PACKET_LOSS_PRECISSION': 100,
         'LATENCY_ALERT': 150,
         'PACKET_LOSS_ALERT': 0.02,
+        'NO_INIT': False
     },
     'NETWORK': {
         'server_address': '127.0.0.1',
@@ -52,6 +53,7 @@ server_address= network.get('server_address')
 server_port= network.getint('server_port')
 client_address= network.get('client_address')
 client_port= network.getint('client_port')
+NO_INIT = general.getboolean('NO_INIT')
 
 print('Q4s_lite Config params')
 print("======================")
@@ -145,7 +147,10 @@ class q4s_lite_node():
         #El rol importa para iniciar conex o medir up/down
         self.role = role
         #id del flujo a medir
-        self.flow_id = 0 
+        if role=="server":
+            self.flow_id = 0 
+        else:
+            self.flow_id = encode_identifier(VEHICLE_ID)
         #udp socket params
         self.address = address
         self.port = port
@@ -234,7 +239,7 @@ class q4s_lite_node():
 
     def init_connection_client(self):
         logger.info("[INIT CONNECTION] CLIENT: Starting connection")
-        self.flow_id = encode_identifier(VEHICLE_ID) #Lo coge de un fichero
+        #self.flow_id = encode_identifier(VEHICLE_ID) #Lo coge de un fichero
         logger.info(f"[INIT CONNECTION] CLIENT: Vehicle id: {self.flow_id}")
         retries = 0
         self.socket.settimeout(3)
@@ -554,7 +559,7 @@ class q4s_lite_node():
                     self.state[2] = time.perf_counter()
                     self.event_publicator.set()#El primer error de conexion emite una alerta
                     print()
-                    printalert(f"[ALERT] CONNECTION ERROR Vehicle_id: {unpacked_data[9]}")
+                    printalert(f"[ALERT] CONNECTION ERROR Vehicle_id: {self.flow_id}")
                 if self.connection_errors == 0:
                     first_connection_error_time = time.perf_counter()                    
                     #print("\n")
@@ -576,12 +581,15 @@ class q4s_lite_node():
         #try:
         #inicio conexion
         self.running = True
-        if self.role=="server":
-            init = self.init_connection_server()
-        elif self.role=="client":
-            init = self.init_connection_client()
+        if NO_INIT == False:
+            if self.role=="server":
+                init = self.init_connection_server()
+            elif self.role=="client":
+                init = self.init_connection_client()
+            else:
+                init = -1
         else:
-            init = -1
+            init = 0
         if init == 0:                
             socket_timeout = 1 # TIME_BETWEEN_PINGS+0.01
             self.socket.settimeout(socket_timeout)#un segundo antes de perdida de conex, mejor valor 360ms, podria ser una vble global, o a fuego por precaucion
