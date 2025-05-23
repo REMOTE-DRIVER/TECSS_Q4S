@@ -155,7 +155,8 @@ class q4s_lite_node():
         self.address = address
         self.port = port
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.socket.bind((address, port))
+        if role=="server": #El cliente no hace bind para reutilizar el socket
+            self.socket.bind((address, port))
         self.target_address = (target_address, target_port)
         #execution check
         self.running=False
