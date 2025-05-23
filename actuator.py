@@ -109,7 +109,7 @@ def actuator(q4s_node):
     while not orig_bandwith_from_coder:
         try_number+=1
         try:
-            ORIG_BANDWIDTH = get_target_bw_orig().split(";")[0] #TODO coger el tercero (2) que es el de configuracion.
+            ORIG_BANDWIDTH = get_target_bw_orig().split(";")[2] #TODO coger el tercero (2) que es el de configuracion.
             ORIG_BANDWIDTH = int(ORIG_BANDWIDTH)
             print(f"ORIG_BANDWIDTH {ORIG_BANDWIDTH}")
             orig_bandwith_from_coder = True

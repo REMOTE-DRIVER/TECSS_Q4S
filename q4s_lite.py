@@ -22,7 +22,7 @@ DEFAULTS = {
         'VEHICLE_ID': "0001",
         'PACKETS_PER_SECOND': 30,
         'PACKET_LOSS_PRECISSION': 100,
-        'LATENCY_ALERT': 20,
+        'LATENCY_ALERT': 150,
         'PACKET_LOSS_ALERT': 0.02,
     },
     'NETWORK': {
@@ -195,40 +195,42 @@ class q4s_lite_node():
         self.packet_loss_decoration = 0
 
     def init_connection_server(self):
-        #print("[INIT CONNECTION] SERVER: Waiting for connection")
         logger.info("[INIT CONNECTION] SERVER: Waiting for connection")
-        self.socket.settimeout(15)
-        try:
-            data, _ = self.socket.recvfrom(PACKET_SIZE)
-            data_rcvd = struct.unpack(PACKET_FORMAT,data)
-            message_type = data_rcvd[0].decode(MSG_FORMAT).strip()
-            if "SYN" in message_type:
-                for i in range(INIT_CONNECTION_TRIES): #while True para que siempre espere
-                    logger.info(f"[INIT CONNECTION] SERVER: Received connexion attempt")
-                    self.flow_id = data_rcvd[9]
-                    logger.info(f"[INIT CONNECTION] SERVER: Vehicle id: {self.flow_id}")
-                    #Responde al syn con ack
-                    packet_data=(ack_message,0,time.time(),0.0,0.0,0.0,0.0,0.0,0.0,self.flow_id)
-                    datos = struct.pack(PACKET_FORMAT,*packet_data)
-                    self.socket.sendto(datos,self.target_address)
-                    #Ahora espero el ack de vuelta
-                    data,_ = self.socket.recvfrom(PACKET_SIZE)
-                    data_rcvd = struct.unpack(PACKET_FORMAT,data)
-                    message_type = data_rcvd[0].decode(MSG_FORMAT).strip()
-                    if "ACK" in message_type:
-                        logger.info("[INIT CONNECTION] SERVER: Start")
-                        return 0
-                    elif "SYN" in message_type:
-                        continue
-                    else:
-                        logger.info("[INIT CONNECTION] SERVER: Error, invalid confirmation")
-                        return -1
-            else:#Reset te llegan ping o resp del otro extremo, pasas directamente a la fase de medicion
-                logger.info(f"[RESET CONNECTION] SERVER: Received PING or RESP message, going directly into Measurement stage")
-                return 0
-        except socket.timeout:
-            logger.info("[INIT CONNECTION] SERVER:Timeout")
-            return -1
+        #self.socket.settimeout(60)
+        while True:
+            try:
+                data, addr = self.socket.recvfrom(PACKET_SIZE)
+                self.target_address = addr
+                data_rcvd = struct.unpack(PACKET_FORMAT,data)
+                message_type = data_rcvd[0].decode(MSG_FORMAT).strip()
+                if "SYN" in message_type:
+                    self.socket.settimeout(3)
+                    for i in range(INIT_CONNECTION_TRIES): #while True para que siempre espere
+                        logger.info(f"[INIT CONNECTION] SERVER: Received connexion attempt")
+                        self.flow_id = data_rcvd[9]
+                        logger.info(f"[INIT CONNECTION] SERVER: Vehicle id: {self.flow_id}")
+                        #Responde al syn con ack
+                        packet_data=(ack_message,0,time.time(),0.0,0.0,0.0,0.0,0.0,0.0,self.flow_id)
+                        datos = struct.pack(PACKET_FORMAT,*packet_data)
+                        self.socket.sendto(datos,self.target_address)
+                        #Ahora espero el ack de vuelta
+                        data,_ = self.socket.recvfrom(PACKET_SIZE)
+                        data_rcvd = struct.unpack(PACKET_FORMAT,data)
+                        message_type = data_rcvd[0].decode(MSG_FORMAT).strip()
+                        if "ACK" in message_type:
+                            logger.info("[INIT CONNECTION] SERVER: Start")
+                            return 0
+                        elif "SYN" in message_type:
+                            continue
+                        else:
+                            logger.info("[INIT CONNECTION] SERVER: Error, invalid confirmation")
+                            return -1
+                else:#Reset te llegan ping o resp del otro extremo, pasas directamente a la fase de medicion
+                    logger.info(f"[RESET CONNECTION] SERVER: Received PING or RESP message, going directly into Measurement stage")
+                    return 0
+            except socket.timeout:
+                logger.info("[INIT CONNECTION] SERVER:Timeout")
+                return -1
 
     def init_connection_client(self):
         logger.info("[INIT CONNECTION] CLIENT: Starting connection")
@@ -238,6 +240,7 @@ class q4s_lite_node():
         self.socket.settimeout(3)
         timestamp=time.time()
         while retries < INIT_CONNECTION_TRIES: #while True para que lo intente hasta que pueda
+        #while True:
             try:
                 packet_data=(syn_message,0,time.time(),0.0,0.0,0.0,0.0,0.0,0.0,self.flow_id)
                 datos = struct.pack(PACKET_FORMAT,*packet_data)
@@ -266,6 +269,80 @@ class q4s_lite_node():
         else:
             logger.info("[INIT CONNECTION] CLIENT: Error, no se puede conectar al servidor")
             return -1
+
+    def init_connection_server_tcp(self):
+        '''try: #intenta recibir un udp primero en caso de desconexion
+            self.socket.settimeout(2)  # Espera breve por UDP
+            data, addr = self.socket.recvfrom(PACKET_SIZE)
+            data_rcvd = struct.unpack(PACKET_FORMAT, data)
+            message_type = data_rcvd[0].decode(MSG_FORMAT).strip()
+            if message_type in ("PING", "RESP", "ACK"):  # O cualquier mensaje válido post-handshake
+                logger.info("[RECONNECT] CLIENT: Detectado servidor activo por UDP, omitiendo TCP.")
+                self.target_address = addr
+                return 0
+        except socket.timeout:
+            logger.info("[RECONNECT] CLIENT: No se detectó actividad UDP, procediendo con TCP.")
+        except Exception as e:
+            logger.error(f"[RECONNECT] CLIENT: Error inesperado en recepción UDP: {e}")'''
+
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as tcp_sock:
+                tcp_sock.bind((self.address, self.port))
+                tcp_sock.listen(1)
+                print('[TCP] Esperando conexión...')
+                
+                conn, addr = tcp_sock.accept()
+                with conn:
+                    print(f'[TCP] Conectado por {addr}')
+                    try:
+                        data = conn.recv(1024)
+                        flow_id = int(data.decode())
+                        flow_id = decode_identifier(flow_id)
+                        print(f'[TCP] flow_id recibido: {flow_id}')
+                        conn.sendall(b'TCP recibido. Envia UDP.')
+                        time.sleep(1)
+                        self.flow_id = flow_id
+                        return flow_id  # opcional: self.flow_id = flow_id
+                    except Exception as e:
+                        print(f'[TCP][Error] Error al recibir/enviar datos: {e}')
+                        return None
+        except socket.error as e:
+            print(f'[TCP][Error] Error de socket del servidor: {e}')
+            return None
+        except Exception as e:
+            print(f'[TCP][Error] Error inesperado: {e}')
+            return None
+
+    def init_connection_client_tcp(self):
+        '''self.flow_id = encode_identifier(VEHICLE_ID)
+
+        # Intentar recibir un paquete UDP primero si esta tras un nat no lo recibe ¿Que hacer si se cae?
+        try:
+            self.socket.settimeout(2)  # Espera breve por UDP
+            data, addr = self.socket.recvfrom(PACKET_SIZE)
+            data_rcvd = struct.unpack(PACKET_FORMAT, data)
+            message_type = data_rcvd[0].decode(MSG_FORMAT).strip()
+            if message_type in ("PING", "RESP", "ACK"):  # O cualquier mensaje válido post-handshake
+                logger.info("[RECONNECT] CLIENT: Detectado servidor activo por UDP, omitiendo TCP.")
+                self.target_address = addr
+                return 0
+        except socket.timeout:
+            logger.info("[RECONNECT] CLIENT: No se detectó actividad UDP, procediendo con TCP.")
+        except Exception as e:
+            logger.error(f"[RECONNECT] CLIENT: Error inesperado en recepción UDP: {e}")'''
+
+        # Si no hay respuesta UDP, iniciar handshake TCP normalmente
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as tcp_sock:
+                tcp_sock.connect(self.target_address)
+                tcp_sock.sendall(str(self.flow_id).encode())
+                data = tcp_sock.recv(1024)
+                logger.info(f'[TCP] Servidor dice: {data.decode()}')
+                time.sleep(1)
+                return 0
+        except Exception as e:
+            logger.error(f'[TCP][Error] Cliente: {e}')
+            return 1
 
 
     @staticmethod
@@ -424,9 +501,12 @@ class q4s_lite_node():
                 #timestamp_recepcion solo se usa para medir, es decir si el mensaje es tipo resp, aqui es mas preciso pero se puede mover para optimizar el proceso
                 #timestamp_recepcion = time.time()
                 timestamp_recepcion = time.perf_counter()
+                if self.role=="server":
+                    self.target_address = addr
                 unpacked_data = struct.unpack(PACKET_FORMAT, data)
                 message_type = unpacked_data[0].decode(MSG_FORMAT).strip()  # El tipo de mensaje es el primer campo
-                #self.flow_id[identificador_actual] = unpacked_data[9]
+                if self.role=="server":
+                    self.flow_id = unpacked_data[9]
                 if message_type == "PING": #PING
                     #if self.latency_decoration > 0:
                     #    time.sleep(self.latency_decoration)
