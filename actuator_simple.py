@@ -9,10 +9,6 @@ import configparser
 
 #Parametros q4s
 event = threading.Event()
-#server_address, server_port = "127.0.0.1",20001
-#client_address, client_port = "127.0.0.1",20002
-#client_address, client_port = "192.168.1.113", 20001
-#server_address, server_port = "192.168.1.51", 20002
 
 #Parametros del actuador
 actuator_alive = False

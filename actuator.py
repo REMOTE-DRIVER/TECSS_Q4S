@@ -4,16 +4,38 @@ import q4s_lite
 import logging,sys
 from datetime import datetime
 import socket
+import configparser
+
 #Parametros q4s
 event = threading.Event()
-#server_address, server_port = "127.0.0.1",20001
-#client_address, client_port = "127.0.0.1",20002
-#server_address, server_port = "192.168.1.113", 20001
-#client_address, client_port = "192.168.1.50", 2000
-
 #Parametros del actuador
 actuator_alive = False
-actuator_host,actuator_port = "127.0.0.1",8889
+DEFAULTS = {'ACTUATOR':{
+                'actuator_address':'127.0.0.1',
+                'actuator_port':'8889'    
+            }}
+
+config = configparser.ConfigParser()
+
+config.read_dict(DEFAULTS)  # cargar valores por defecto primero
+config.read("q4s_lite_config.ini")
+# Acceder y convertir tipos
+general = config['GENERAL']
+network = config['NETWORK']
+actuator = config['ACTUATOR']
+
+actuator_host= actuator.get('actuator_host')
+actuator_port= actuator.getint('actuator_port')
+#falta obtener los de q4s para crear el q4s_node
+server_address, server_port = q4s_lite.server_address, q4s_lite.server_port#"127.0.0.1",20001
+client_address, client_port = q4s_lite.client_address, q4s_lite.client_port#"127.0.0.1",20002
+
+print('\nActuator Config params')
+print("======================")
+print(f"actuator_address,actuator_port = {actuator_host},{actuator_port}")
+print(f"server_address,server_port = {server_address},{server_port}")
+print(f"client_address,client_port = {client_address},{client_port}")
+print()
 
 #logging
 logger = logging.getLogger('q4s_logger')
