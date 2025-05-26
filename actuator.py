@@ -6,8 +6,8 @@ from datetime import datetime
 import socket
 #Parametros q4s
 event = threading.Event()
-server_address, server_port = "127.0.0.1",20001
-client_address, client_port = "127.0.0.1",20002
+#server_address, server_port = "127.0.0.1",20001
+#client_address, client_port = "127.0.0.1",20002
 #server_address, server_port = "192.168.1.113", 20001
 #client_address, client_port = "192.168.1.50", 2000
 

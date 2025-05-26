@@ -202,7 +202,7 @@ class q4s_lite_node():
 
     def init_connection_server(self):
         logger.info("[INIT CONNECTION] SERVER: Waiting for connection")
-        #self.socket.settimeout(60)
+        self.socket.settimeout(30)
         while True:
             try:
                 data, addr = self.socket.recvfrom(PACKET_SIZE)
@@ -629,6 +629,7 @@ if __name__=="__main__":
     main_run = True
     #os.system('cls' if os.name == 'nt' else 'clear')
     MODO_STANDALONE = True
+
     if len(sys.argv)<2:
         print("Usage")
     elif len(sys.argv)==2:

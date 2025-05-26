@@ -5,10 +5,8 @@ import logging
 
 #Parametros q4s
 event = threading.Event()
-server_address, server_port = "127.0.0.1",20001
-client_address, client_port = "127.0.0.1",20002
-#server_address, server_port = "192.168.1.113", 20001
-#client_address, client_port = "192.168.1.50", 2000
+server_address, server_port = q4s_lite.server_address, q4s_lite.server_port
+client_address, client_port = q4s_lite.client_address, q4s_lite.client_port
 
 PUBLICATION_TIME = 3 #segundos
 PUBLICATION_ALERT_TIME = 1 #segundo
