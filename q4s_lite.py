@@ -145,7 +145,14 @@ class q4s_lite_node():
         #El rol importa para iniciar conex o medir up/down
         self.role = role
         #id del flujo a medir
-        self.flow_id = 0 
+        # self.flow_id = 0 
+            # ✅ FIX: Asignar flow_id basado en VEHICLE_ID desde el inicio
+        if role == "client":
+            self.flow_id = encode_identifier(VEHICLE_ID)
+            logger.info(f"[INIT] CLIENT: Vehicle ID '{VEHICLE_ID}' -> Flow ID: {self.flow_id}")
+        else:  # server
+            self.flow_id = 0  # Se establecerá cuando reciba el SYN del cliente
+            logger.info(f"[INIT] SERVER: Flow ID will be set when receiving SYN")
         #udp socket params
         self.address = address
         self.port = port
