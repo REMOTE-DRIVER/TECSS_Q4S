@@ -27,7 +27,7 @@ general = config['GENERAL']
 network = config['NETWORK']
 actuator = config['ACTUATOR']
 
-actuator_host= actuator.get('actuator_host')
+actuator_host= actuator.get('actuator_address')
 actuator_port= actuator.getint('actuator_port')
 #falta obtener los de q4s para crear el q4s_node
 server_address, server_port = q4s_lite.server_address, q4s_lite.server_port#"127.0.0.1",20001

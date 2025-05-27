@@ -64,7 +64,7 @@ def alert_publicator(q4s_node):
 def measures_publicator(q4s_node):
     global publicator_alive
     while publicator_alive:
-        print(f"[PUBLICATOR] Vehicle id = {decode_identifier(q4s_node.flow_id)} Measures Latency:{q4s_node.latency_combined:.10f} Packet_loss: {q4s_node.packet_loss_combined:.3f}")
+        print(f"\n[PUBLICATOR] Vehicle id = {decode_identifier(q4s_node.flow_id)} Measures Latency:{q4s_node.latency_combined:.10f} Packet_loss: {q4s_node.packet_loss_combined:.3f}")
         time.sleep(PUBLICATION_TIME)
 
 
@@ -85,10 +85,8 @@ def main():
     while True:
             #time.sleep(0.1)
             print("")
-            print("1: empeora latencia")
-            print("2: mejora latencia")
-            print("3: pierde un 10 por ciento de paquetes")
-            print("4: deja de perder paquetes")
+            print("1: pierde un 10 por ciento de paquetes")
+            print("2: deja de perder paquetes")
             #print("5: restart publicator")
             print("0: Salir")
             print("\nElige una opción: \n")
@@ -102,13 +100,9 @@ def main():
                 q4s_node.hilo_rcv.join()
                 break
             elif option == '1':
-                q4s_node.latency_decoration+=0.1
+                q4s_node.packet_loss_decoration=0.1
+                #print(f"Packet_loss_decoration =  {q4s_node.packet_loss_decoration}")
             elif option == '2':
-                q4s_node.latency_decoration=0
-            elif option == '3':
-                q4s_node.packet_loss_decoration=0.8
-                print(f"Packet_loss_decoration =  {q4s_node.packet_loss_decoration}")
-            elif option == '4':
                 q4s_node.packet_loss_decoration=0
             '''elif option == '5':#Opcion desactivada
                 publicator_alive=False

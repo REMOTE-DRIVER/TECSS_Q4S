@@ -12,7 +12,8 @@ event = threading.Event()
 actuator_alive = False
 DEFAULTS = {'ACTUATOR':{
                 'actuator_address':'127.0.0.1',
-                'actuator_port':'8889'    
+                'actuator_port':'8889',
+                'insignificant_loses': 0.01
             }}
 
 config = configparser.ConfigParser()
@@ -24,8 +25,9 @@ general = config['GENERAL']
 network = config['NETWORK']
 actuator = config['ACTUATOR']
 
-actuator_host= actuator.get('actuator_host')
+actuator_host= actuator.get('actuator_address')
 actuator_port= actuator.getint('actuator_port')
+insignificant_loses = actuator.getfloat('insignificant_loses')
 #falta obtener los de q4s para crear el q4s_node
 server_address, server_port = q4s_lite.server_address, q4s_lite.server_port#"127.0.0.1",20001
 client_address, client_port = q4s_lite.client_address, q4s_lite.client_port#"127.0.0.1",20002
@@ -35,6 +37,7 @@ print("======================")
 print(f"actuator_address,actuator_port = {actuator_host},{actuator_port}")
 print(f"server_address,server_port = {server_address},{server_port}")
 print(f"client_address,client_port = {client_address},{client_port}")
+print(f"insignificant_losses = {insignificant_loses}")
 print()
 
 #logging
@@ -297,7 +300,7 @@ def actuator(q4s_node):
             new_packet_loss = q4s_node.packet_loss_combined
 
             #Paso 4: Si es mejor vamos a estado 0
-            if new_packet_loss <= 0.01: #Si es menor de un 2 por ciento se pasa a estado 0 TODO: Consensuar valor
+            if new_packet_loss <= insignificant_loses: #Si es menor de un 2 por ciento se pasa a estado 0 TODO: Consensuar valor
                 print("\n    [ACTUATOR (2)]: La perdida es insignificante, vuelvo a estado 0\n")
                 state = 0
                 continue
@@ -391,22 +394,16 @@ def main():
 
         elif option == '1':  # Submenú de pérdidas
             while True:
-                print("\n1: Empeora latencia")
-                print("2: Mejora latencia")
-                print("3: Pierde un 10 por ciento de paquetes")
-                print("4: No pierdas paquetes")
+                print("\n1: Pierde un 10 por ciento de paquetes")
+                print("2: No pierdas paquetes")
                 print("0: Atrás")
                 sub_option = input("Elige una opción: ")
 
                 if sub_option == '0':
                     break
                 elif sub_option == '1':
-                    q4s_node.latency_decoration += 0.1
-                elif sub_option == '2':
-                    q4s_node.latency_decoration = 0
-                elif sub_option == '3':
                     q4s_node.packet_loss_decoration += 0.1
-                elif sub_option == '4':
+                elif sub_option == '2':
                     q4s_node.packet_loss_decoration = 0
 
         elif option == '2':  # Submenú de peticiones al coder
