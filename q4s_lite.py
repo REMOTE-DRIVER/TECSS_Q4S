@@ -671,8 +671,6 @@ if __name__=="__main__":
             q4s_node.run()
             try:
                 while q4s_node.running:#Aqui se puede poner menu de control con simulacion de perdidas etc...
-                    #print("\n1: Empeora latencia")
-                    #print("2: Mejora latencia")
                     print("\n1: Pierde un 10 por ciento mas de paquetes")
                     print("2: No pierdas paquetes")
                     print("0: Atrás")
@@ -687,10 +685,6 @@ if __name__=="__main__":
                     elif sub_option == '2':
                         #q4s_node.latency_decoration = 0
                         q4s_node.packet_loss_decoration = 0
-                    elif sub_option == '3':
-                        q4s_node.packet_loss_decoration += 0.1
-                    elif sub_option == '4':
-                        q4s_node.packet_loss_decoration = 0
             except KeyboardInterrupt:
                 q4s_node.measuring=False
                 q4s_node.hilo_snd.join()
@@ -700,6 +694,3 @@ if __name__=="__main__":
             print("Opcion no reconocida\nUsage:  ")
     else:
         print("Too much arguments\nUsage:  ")
-
-    #os.system('cls' if os.name == 'nt' else 'clear')
-   #modo libreria con init, q reciba funcion de callback para avisar de las alertas 
