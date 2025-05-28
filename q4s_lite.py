@@ -498,7 +498,9 @@ class q4s_lite_node():
                 self.state[0]="normal"
                 self.state[1]=time.perf_counter()
                 self.state[2]=time.perf_counter()
+                self.event_publicator.set()
                 logger.debug(f"[RECOVERY]:  Vehicle_id: {flow_id} Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
+                printalert(f"\n[RECOVERY]:  Vehicle_id: {flow_id} Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
 
 
     def measurement_receive_message(self):
