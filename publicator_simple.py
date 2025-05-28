@@ -58,10 +58,10 @@ def alert_publicator(q4s_node):
         q4s_node.event_publicator.wait()
         q4s_node.event_publicator.clear()
         alert_code = check_alert(q4s_node)
-        #Si el estado no es normal, es alert
-        if q4s_node.state[0]!="normal": #Si es una alerta
+        #Si te han despertado y el estado no es normal, es alert
+        if q4s_node.state[0]=="alert": #Si es una alerta
             print(f"\n[PUBLICATOR ALERTS] Alerta con codigo {alert_code}:{q4s_node.latency_combined} {q4s_node.packet_loss_combined} {q4s_node.connection_errors} Vehicle id = {decode_identifier(q4s_node.flow_id)}")
-        else: #Si es un recovery
+        elif q4s_node.state[0]=="normal": #Si te despiertan y el estado es normal, es un recovery
             print(f"\n[PUBLICATOR ALERTS] Recovery {alert_code}:{q4s_node.latency_combined} {q4s_node.packet_loss_combined} {q4s_node.connection_errors} Vehicle id = {decode_identifier(q4s_node.flow_id)}")
 
     print("\nFinished alert publication you must relaunch the program\nPress 0 to exit\n")
