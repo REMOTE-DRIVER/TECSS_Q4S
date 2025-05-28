@@ -13,7 +13,9 @@ actuator_alive = False
 DEFAULTS = {'ACTUATOR':{
                 'actuator_address':'127.0.0.1',
                 'actuator_port':'8889',
-                'insignificant_loses': 0.01
+                'insignificant_loses': 0.01,
+                'fuentes': 1,
+                'TAM_POR_FUENTE':250000
             }}
 
 config = configparser.ConfigParser()
@@ -28,7 +30,9 @@ actuator = config['ACTUATOR']
 actuator_host= actuator.get('actuator_address')
 actuator_port= actuator.getint('actuator_port')
 insignificant_loses = actuator.getfloat('insignificant_loses')
-#falta obtener los de q4s para crear el q4s_node
+FUENTES = actuator.getint('FUENTES')
+TAM_POR_FUENTE = actuator.getint('TAM_POR_FUENTE')
+
 server_address, server_port = q4s_lite.server_address, q4s_lite.server_port#"127.0.0.1",20001
 client_address, client_port = q4s_lite.client_address, q4s_lite.client_port#"127.0.0.1",20002
 
@@ -38,6 +42,8 @@ print(f"actuator_address,actuator_port = {actuator_host},{actuator_port}")
 print(f"server_address,server_port = {server_address},{server_port}")
 print(f"client_address,client_port = {client_address},{client_port}")
 print(f"insignificant_losses = {insignificant_loses}")
+print(f"fuentes = {FUENTES}")
+print(f"tam por fuente = {TAM_POR_FUENTE}")
 print()
 
 #logging
@@ -52,8 +58,8 @@ client_handler.setFormatter(formatter)
 LATENCY_ALERT = q4s_lite.LATENCY_ALERT#360 #milisegundos
 PACKET_LOSS_ALERT = q4s_lite.PACKET_LOSS_ALERT#0.1#0.02 #2%
 
-FUENTES = 1
-slot = FUENTES*250000 #TODO en mayusculas
+#FUENTES = 1
+slot = FUENTES*TAM_POR_FUENTE #TODO en mayusculas
 #ORIG_BANDWIDTH = FUENTES * 6000000
 MAX_ALERTS_CONSECUTIVES = 6
 DEMO = False
