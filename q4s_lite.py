@@ -214,7 +214,8 @@ class q4s_lite_node():
                     for i in range(INIT_CONNECTION_TRIES): #while True para que siempre espere
                         logger.info(f"[INIT CONNECTION] SERVER: Received connexion attempt")
                         self.flow_id = data_rcvd[9]
-                        logger.info(f"[INIT CONNECTION] SERVER: Vehicle id: {self.flow_id}")
+                        decoded_identifier = decode_identifier(self.flow_id)
+                        logger.info(f"[INIT CONNECTION] SERVER: Vehicle id: {decoded_identifier}")
                         #Responde al syn con ack
                         packet_data=(ack_message,0,time.time(),0.0,0.0,0.0,0.0,0.0,0.0,self.flow_id)
                         datos = struct.pack(PACKET_FORMAT,*packet_data)
@@ -241,7 +242,8 @@ class q4s_lite_node():
     def init_connection_client(self):
         logger.info("[INIT CONNECTION] CLIENT: Starting connection")
         #self.flow_id = encode_identifier(VEHICLE_ID) #Lo coge de un fichero
-        logger.info(f"[INIT CONNECTION] CLIENT: Vehicle id: {self.flow_id}")
+        decoded_identifier = decode_identifier(self.flow_id)
+        logger.info(f"[INIT CONNECTION] CLIENT: Vehicle id: {decoded_identifier}")
         retries = 0
         self.socket.settimeout(3)
         timestamp=time.time()
@@ -546,8 +548,9 @@ class q4s_lite_node():
                     
                     #Posible TODO: Printar y comprobar alertas cada n paquetes, los necesarios para dar una alarma cada SMOOTHING_PARAM Paquetes
                     #mejor llamar mucho y comprobarlo dentro, en caso de fallo llegan pocos recoveries y puedes perder tiempo
-                    print(f"[MEASURING] Latency:{self.latency_combined:.10f} Packet_loss: {self.packet_loss_combined:.3f} Jitter: {self.jitter_combined:.3f} Vehicle id: {unpacked_data[9]}", end="\r")
-                    self.check_alert(self.latency_combined>=LATENCY_ALERT,self.packet_loss_combined>=PACKET_LOSS_ALERT, unpacked_data[9])
+                    decoded_identifier = decode_identifier(unpacked_data[9])
+                    print(f"[MEASURING] Latency:{self.latency_combined:.10f} Packet_loss: {self.packet_loss_combined:.3f} Jitter: {self.jitter_combined:.3f} Vehicle id: {decoded_identifier}", end="\r")
+                    self.check_alert(self.latency_combined>=LATENCY_ALERT,self.packet_loss_combined>=PACKET_LOSS_ALERT, decoded_identifier)
                     #if self.latency_decoration > 0:
                     #    time.sleep(self.latency_decoration)
 
@@ -560,7 +563,8 @@ class q4s_lite_node():
                     self.state[2] = time.perf_counter()
                     self.event_publicator.set()#El primer error de conexion emite una alerta
                     print()
-                    printalert(f"[ALERT] CONNECTION ERROR Vehicle_id: {self.flow_id}")
+                    decoded_identifier = decode_identifier(self.flow_id)
+                    printalert(f"[ALERT] CONNECTION ERROR Vehicle_id: {decoded_identifier}")
                 if self.connection_errors == 0:
                     first_connection_error_time = time.perf_counter()                    
                     #print("\n")
