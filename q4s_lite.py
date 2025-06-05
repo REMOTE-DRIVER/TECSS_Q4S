@@ -180,6 +180,7 @@ class q4s_lite_node():
         self.packet_loss_down=0.0
         #connection errors
         self.connection_errors = 0
+        self.first_connection_error_time = 0
         #average_measures
         self.latency_combined = 0.0
         self.jitter_combined = 0.0
@@ -511,6 +512,11 @@ class q4s_lite_node():
                 #timestamp_recepcion solo se usa para medir, es decir si el mensaje es tipo resp, aqui es mas preciso pero se puede mover para optimizar el proceso
                 #timestamp_recepcion = time.time()
                 timestamp_recepcion = time.perf_counter()
+                #Reseteo de connection error
+                if self.connection_errors>0:
+                    if timestamp_recepcion-self.first_connection_error_time >= CONNECTION_ERROR_TIME_MARGIN:
+                        self.connection_errors = 0
+
                 if self.role=="server":
                     self.target_address = addr
                 unpacked_data = struct.unpack(PACKET_FORMAT, data)
@@ -551,7 +557,7 @@ class q4s_lite_node():
                     #Posible TODO: Printar y comprobar alertas cada n paquetes, los necesarios para dar una alarma cada SMOOTHING_PARAM Paquetes
                     #mejor llamar mucho y comprobarlo dentro, en caso de fallo llegan pocos recoveries y puedes perder tiempo
                     decoded_identifier = decode_identifier(unpacked_data[9])
-                    print(f"[MEASURING] Latency:{self.latency_combined:.10f} Packet_loss: {self.packet_loss_combined:.3f} Jitter: {self.jitter_combined:.3f} Vehicle id: {decoded_identifier}", end="\r")
+                    print(f"[MEASURING:{decoded_identifier}] Lat:{self.latency_combined:.6f} Loss: {self.packet_loss_combined:.3f} Jitter: {self.jitter_combined:.3f} Conn: {self.connection_errors}", end="\r")
                     self.check_alert(self.latency_combined>=LATENCY_ALERT,self.packet_loss_combined>=PACKET_LOSS_ALERT, decoded_identifier)
                     #if self.latency_decoration > 0:
                     #    time.sleep(self.latency_decoration)
@@ -564,15 +570,15 @@ class q4s_lite_node():
                     self.state[0] = "alert"
                     self.state[2] = time.perf_counter()
                     self.event_publicator.set()#El primer error de conexion emite una alerta
-                    print()
+                    #print()
                     decoded_identifier = decode_identifier(self.flow_id)
-                    printalert(f"[ALERT] CONNECTION ERROR Vehicle_id: {decoded_identifier}")
+                    #printalert(f"[ALERT] CONNECTION ERROR Vehicle_id: {decoded_identifier} Conn: {self.connection_errors}")
                 if self.connection_errors == 0:
-                    first_connection_error_time = time.perf_counter()                    
+                    self.first_connection_error_time = time.perf_counter()                    
                     #print("\n")
                 self.connection_errors+=1
-                #print(f"Conection errors in last {CONNECTION_ERROR_TIME_MARGIN} second: {self.connection_errors}\t\t\t\t\t\t", end="\r") 
-                if time.perf_counter()-first_connection_error_time >= CONNECTION_ERROR_TIME_MARGIN:
+                printalert(f"[ALERT] CONNECTION ERROR Vehicle_id: {decoded_identifier}  in last {CONNECTION_ERROR_TIME_MARGIN} second: {self.connection_errors}\t\t", end="\r") 
+                if time.perf_counter()-self.first_connection_error_time >= CONNECTION_ERROR_TIME_MARGIN:
                     self.connection_errors = 0
                 continue
             except Exception as error:
@@ -604,7 +610,9 @@ class q4s_lite_node():
             self.hilo_rcv = threading.Thread(target=self.measurement_receive_message, daemon=True, name="hilo_rcv")
             self.hilo_snd = threading.Thread(target=self.measurement_send_ping, daemon=True, name="hilo_snd")
             
-            self.state=["normal",time.perf_counter(),time.perf_counter()]
+            actual_time = time.perf_counter()
+            self.state=["normal",actual_time,actual_time]
+            self.first_connection_error_time = actual_time
             self.measuring = True
             if self.role=="server":
                 self.hilo_rcv.start()
