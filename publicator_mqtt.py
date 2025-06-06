@@ -30,11 +30,6 @@ PASSWORD: Final[str] = load_password()
 
 PUBLICATION_TIME: Final[int] = 3  # segundos
 
-
-
-# ---------------------------------------------------------------------------
-# Logger
-# ---------------------------------------------------------------------------
 print() # Para separar la salida del logger de la salida estándar
 logger = logging.getLogger("q4s_publicator")
 logger.setLevel(logging.INFO)
@@ -44,9 +39,6 @@ _console_hdl.setFormatter(_formatter)
 logger.addHandler(_console_hdl)
 logger.addHandler(logging.FileHandler("publicador_mqtt.log", mode="w", encoding="utf-8"))
 
-# ---------------------------------------------------------------------------
-# Identificador 4‑bytes <-> str
-# ---------------------------------------------------------------------------
 
 def encode_identifier(identifier: str) -> int:
     if len(identifier) != 4:
@@ -57,19 +49,53 @@ def encode_identifier(identifier: str) -> int:
 def decode_identifier(number: int) -> str:
     return number.to_bytes(4, byteorder="big").decode()
 
-# ---------------------------------------------------------------------------
-# Cálculo del código de alerta (bit2-bit1-bit0)
-# ---------------------------------------------------------------------------
 
 def compute_alert_code(q4s_node: "q4s_lite.q4s_lite_node") -> int:
-    connection_alert = int(q4s_node.connection_errors > 0)      # bit 2
-    latency_alert = int(q4s_node.latency_combined > LATENCY_ALERT)  # bit 1
-    loss_alert = int(q4s_node.packet_loss_combined > PACKET_LOSS_ALERT)  # bit 0
+    # Calcula el código de alerta basado en los estados de conexión, latencia y pérdida de paquetes.
+    # Los bits se asignan de la siguiente manera:
+    # bit0: pérdida de paquetes (1 si la pérdida de paquetes combinada supera el umbral)
+    # bit1: latencia (1 si la latencia combinada supera el umbral)
+    # bit2: conexión (1 si hay errores de conexión)
+    # Resultado:
+    # 0: sin alertas
+    # 1: alerta de pérdida de paquetes
+    # 2: alerta de latencia
+    # 3: alerta de latencia y pérdida de paquetes
+    # 4: alerta de conexión
+    # 5: alerta de conexión y pérdida de paquetes
+    # 6: alerta de conexión y latencia
+    # 7: alerta de conexión, latencia y pérdida de paquetes
+    connection_alert = int(q4s_node.connection_errors > 0)
+    latency_alert = int(q4s_node.latency_combined > LATENCY_ALERT)
+    loss_alert = int(q4s_node.packet_loss_combined > PACKET_LOSS_ALERT)
     return (connection_alert << 2) | (latency_alert << 1) | loss_alert
 
-# ---------------------------------------------------------------------------
-# Publishers
-# ---------------------------------------------------------------------------
+
+def compute_explanation(alert_code: int) -> str:
+    if alert_code == 0:
+        return "sin alertas"
+    explanations = []
+    if alert_code & 1:  # bit0: pérdida de paquetes
+        explanations.append("pl")
+    if alert_code & 2:  # bit1: latencia
+        explanations.append("lat")
+    if alert_code & 4:  # bit2: conexión
+        explanations.append("conn")
+    return ",".join(explanations)
+
+
+def compute_alert_level(alert_code: int) -> int:
+    # baja --> 0,1,2,3 media --> 4,5,6 alta --> 7, recovery
+    # nivel (0-3): 0=baja, 1=media, 2=alta, 3=recovery
+    if alert_code in (0, 1, 2, 3):
+        return 0
+    elif alert_code in (4, 5, 6):
+        return 1
+    elif alert_code == 7:
+        return 2
+    else:
+        raise ValueError(f"Código de alerta desconocido: {alert_code}. Debe ser 0-7.")
+
 
 def measures_publisher(q4s_node: "q4s_lite.q4s_lite_node", mqttc: mqtt.Client,
                        connected_evt: threading.Event, running_evt: threading.Event) -> None:
@@ -81,7 +107,7 @@ def measures_publisher(q4s_node: "q4s_lite.q4s_lite_node", mqttc: mqtt.Client,
             f"lat={q4s_node.latency_combined:.10f};"
             f"jit={q4s_node.jitter_combined:.3f};"
             f"pl={q4s_node.packet_loss_combined:.3f};"
-            f"err={q4s_node.connection_errors}"
+            f"conn={q4s_node.connection_errors}"
         )
         mqttc.publish(topic, payload, qos=1, retain=False)
         print() 
@@ -106,21 +132,26 @@ def alerts_publisher(q4s_node: "q4s_lite.q4s_lite_node", mqttc: mqtt.Client,
             print() 
             logger.warning("Alerta ignorada: sin conexión MQTT")
             continue
-
-        code = compute_alert_code(q4s_node)
+        
+        alert_code = compute_alert_code(q4s_node)
+        if q4s_node.state[0]=="alert":  # Si es una alerta
+            alert_level = compute_alert_level(alert_code)
+            explanation = compute_explanation(alert_code)  # Explicación de la alerta
+        elif q4s_node.state[0]=="normal":  # Si te despiertan y el estado es normal, es un recovery
+            alert_level = 3  # recovery
+            explanation = "recovery"
         payload = (
-            f"code={code};lat={q4s_node.latency_combined:.10f};"
+            f"level={alert_level};"
+            f"code={alert_code};lat={q4s_node.latency_combined:.10f};"
+            f"explicación={explanation};"
             f"jit={q4s_node.jitter_combined:.3f};"
             f"pl={q4s_node.packet_loss_combined:.3f};"
-            f"err={q4s_node.connection_errors}"
+            f"conn={q4s_node.connection_errors}"
         )
         mqttc.publish(topic, payload, qos=1, retain=False)
         print() 
         logger.info("[ALERT] %s -> %s", topic, payload)
 
-# ---------------------------------------------------------------------------
-# Callbacks MQTT
-# ---------------------------------------------------------------------------
 
 def on_connect(client: mqtt.Client, userdata, flags, reason_code, properties):
     # MQTT v5 ⇒ reason_code es objeto ReasonCodes.  En v3.1.1 sería un int.
@@ -158,9 +189,6 @@ def on_publish(client, userdata, mid, reason_code, properties):
                      mid, code_val, reason_code.getName())
 
 
-# ---------------------------------------------------------------------------
-# Graceful exit
-# ---------------------------------------------------------------------------
 _RUNNING_EVENT = threading.Event()
 _CONNECTED_EVENT = threading.Event()
 
@@ -185,9 +213,7 @@ def graceful_exit(_: int | None = None, __: object | None = None):
 signal.signal(signal.SIGINT, graceful_exit)
 signal.signal(signal.SIGTERM, graceful_exit)
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
+
 if __name__ == "__main__":
     _Q4S_NODE = q4s_lite.q4s_lite_node(
         role="server",
@@ -203,7 +229,6 @@ if __name__ == "__main__":
 
     flow_txt = decode_identifier(_Q4S_NODE.flow_id)  # '7777'
     client_id = f"q4s_{flow_txt}" 
-    # client_id = f"q4s_{flow_txt}_{os.getpid()}"      # ‘q4s_7777_12345’
 
     _MQTT_CLIENT = mqtt.Client(
     client_id=client_id,
