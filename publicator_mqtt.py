@@ -142,8 +142,9 @@ def alerts_publisher(q4s_node: "q4s_lite.q4s_lite_node", mqttc: mqtt.Client,
             explanation = "recovery"
         payload = (
             f"level={alert_level};"
-            f"code={alert_code};lat={q4s_node.latency_combined:.10f};"
+            f"code={alert_code};"
             f"explicación={explanation};"
+            f"lat={q4s_node.latency_combined:.10f};"
             f"jit={q4s_node.jitter_combined:.3f};"
             f"pl={q4s_node.packet_loss_combined:.3f};"
             f"conn={q4s_node.connection_errors}"
