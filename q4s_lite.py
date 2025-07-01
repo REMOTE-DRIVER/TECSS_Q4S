@@ -436,7 +436,8 @@ class q4s_lite_node():
 
                 #time.sleep(TIME_BETWEEN_PINGS)#Esto es la cadencia de paquetes por segundo, configurable tambien
                 #sleep aleatorio entre time_between_pings y 2*time_between_pings
-                sleep_time = random.uniform(TIME_BETWEEN_PINGS, 2*TIME_BETWEEN_PINGS)
+                #sleep_time = random.uniform(TIME_BETWEEN_PINGS, 2*TIME_BETWEEN_PINGS)
+                sleep_time = random.uniform(0, 2*TIME_BETWEEN_PINGS)
                 time.sleep(sleep_time)
             except KeyboardInterrupt:
                 self.measuring=False
