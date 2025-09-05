@@ -387,6 +387,7 @@ def main():
     while True:
         print("\n1: Menu Pérdidas")
         print("2: Menu Peticiones")
+        print("9: Repetir menu")
         print("0: Salir")
         option = input("\nElige una opción: ")
 
@@ -397,11 +398,13 @@ def main():
             q4s_node.hilo_snd.join()
             q4s_node.hilo_rcv.join()
             break
-
         elif option == '1':  # Submenú de pérdidas
             while True:
                 print("\n1: Pierde un 10 por ciento de paquetes")
                 print("2: No pierdas paquetes")
+                print("3: BER de 50000")
+                print("4: BER de 0")
+                print("9: Repetir menu")
                 print("0: Atrás")
                 sub_option = input("Elige una opción: ")
 
@@ -409,14 +412,29 @@ def main():
                     break
                 elif sub_option == '1':
                     q4s_node.packet_loss_decoration += 0.1
+                    send_command(f"SET_LOSS:10")
                 elif sub_option == '2':
                     q4s_node.packet_loss_decoration = 0
+                    send_command(f"SET_LOSS:0")
+                elif sub_option == '3':
+                    send_command(f"SET_BER:50000")
+                elif sub_option == '4':
+                    send_command(f"SET_BER:0")
+                elif sub_option == "9":
+                    continue
+
 
         elif option == '2':  # Submenú de peticiones al coder
             while True:
                 print("\n1: Petición GET_TARGET_BW_ORIG")
                 print("2: Petición SET_TARGET_BW_ORIG")
-                print("3: Petición SET_NOISE_RESIST")
+                print("3: Petición SET_NOISE_RESIST ON")
+                print("4: Petición SET_NOISE_RESIST OFF")
+                print("5: Petición BER 50000")
+                print("6: Petición BER 0")
+                print("7: Petición SET_LOSS 10")
+                print("8: Petición SET_LOSS 0")
+                print("9: Repetir menu")
                 print("0: Atrás")
                 sub_option = input("Introduce una opción: ")
                 
@@ -426,10 +444,24 @@ def main():
                     value = int(input("Dime valor de ancho de banda objetivo: "))
                     print(send_command(f"SET_TARGET_BW_ORIG:{value}"))
                 elif sub_option == "3":
-                    enable = int(input("Activar (1)/Desactivar (0) modo noise resist: "))
-                    print(send_command(f"SET_NOISE_RESIST:{enable}"))
+                    print(send_command(f"SET_NOISE_RESIST:1"))
+                elif sub_option == "4":
+                    print(send_command(f"SET_NOISE_RESIST:0"))
+                elif sub_option == "5":
+                    print(send_command(f"SET_BER:50000"))
+                elif sub_option == "6":
+                    print(send_command(f"SET_BER:0"))
+                elif sub_option == "7":
+                    print(send_command(f"SET_LOSS:10"))
+                elif sub_option == "8":
+                    print(send_command(f"SET_LOSS:0"))
+                elif sub_option == "9":
+                    continue
                 elif sub_option == "0":
                     break
+        elif option == "9":
+            continue
+
 
     print("EXIT")
 
