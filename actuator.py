@@ -348,8 +348,17 @@ def actuator(q4s_node):
                 state = 2
                 continue
             else:#las perdidas se mantienen o bajan
-                if actuator_bandwidth < ORIG_BANDWIDTH-(slot/FUENTES):
+                #Nuevo resolver bug, no actualizaba coder_actual_bandwidth
+                try:
+                    coder_actual_and_orig_bandwidth = get_target_bw_orig().split(";")
+                except:
+                    state=0
+                    continue
+                coder_actual_bandwidth,coder_orig_bandwidth = int(coder_actual_and_orig_bandwidth[0]), int(coder_actual_and_orig_bandwidth[1]) 
+                #################
+                if actuator_bandwidth <= ORIG_BANDWIDTH-(slot/FUENTES):
                     print("\n    [ACTUATOR (2)]: He esperado y las perdidas se mantienen o bajan, subo el ancho de banda\n")
+                    #print(f"coder_actual_bandwidth = {coder_actual_bandwidth} \ncoder_orig_bandwidth = {coder_orig_bandwidth} \nactuator_bandwidth = {actuator_bandwidth}")
                     #subirlo hasta llegar a orig_bandwidth                
                     if coder_actual_bandwidth == coder_orig_bandwidth:
                         bandwith_parameter = actuator_bandwidth+slot
