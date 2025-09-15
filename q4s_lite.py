@@ -34,11 +34,21 @@ DEFAULTS = {
     }
 }
 
+
+
+if len(sys.argv)==3:
+    config_file = sys.argv[2]
+else:
+    config_file = "q4s_lite_config.ini"
+
+if not (os.path.exists(config_file)):
+    print("\n[Q4S Lite CONFIG] Config file not found using default configuration values\n")
+
 config = configparser.ConfigParser()
 
 # Leer el archivo
 config.read_dict(DEFAULTS)  # cargar valores por defecto primero
-config.read("q4s_lite_config.ini")      # luego sobrescribir con lo del fichero si existe
+config.read(config_file)      # luego sobrescribir con lo del fichero si existe
 
 # Acceder y convertir tipos
 general = config['GENERAL']
@@ -647,7 +657,7 @@ if __name__=="__main__":
 
     if len(sys.argv)<2:
         print("Usage")
-    elif len(sys.argv)==2:
+    elif len(sys.argv)==2 or len(sys.argv)==3:
         if sys.argv[1] == "-s":            
             logger.addHandler(server_handler)
             q4s_node = q4s_lite_node("server",server_address, server_port, client_address, client_port)
@@ -709,3 +719,5 @@ if __name__=="__main__":
             print("Opcion no reconocida\nUsage:  ")
     else:
         print("Too much arguments\nUsage:  ")
+
+
