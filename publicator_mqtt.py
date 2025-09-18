@@ -2,15 +2,74 @@ from __future__ import annotations
 
 import logging
 import signal
-import sys
+import sys, os
 import threading
 import time
 from typing import Final
 from pathlib import Path
+import configparser
 
 import q4s_lite
 from paho.mqtt import client as mqtt
 from paho.mqtt.enums import CallbackAPIVersion
+
+
+DEFAULTS = {
+    'GENERAL': {
+        'VEHICLE_ID': "0001",
+        'PACKETS_PER_SECOND': 30,
+        'PACKET_LOSS_PRECISSION': 100,
+        'LATENCY_ALERT': 150,
+        'PACKET_LOSS_ALERT': 0.02,
+        'NO_INIT': False
+    },
+    'NETWORK': {
+        'server_address': '127.0.0.1',
+        'server_port': 20001,
+        'client_address': '127.0.0.1',
+        'client_port': 20002,
+    },
+    'ACTUATOR':{
+        'actuator_address':'127.0.0.1',
+        'actuator_port':'8889',
+        'insignificant_loses': 0.01,
+        'fuentes': 1,
+        'TAM_POR_FUENTE':250000
+    },
+    'PUBLICATOR':{
+        'PUBLICATION_TIME': 3,
+        'PUBLICATION_ALERT_TIME': 1
+    }
+}
+if len(sys.argv)==2:
+    config_file = sys.argv[1]
+else:
+    config_file = "q4s_lite_config.ini"
+
+if not (os.path.exists(config_file)):
+    print("\n[Q4S Lite CONFIG] Config file not found using default configuration values\n")
+
+config = configparser.ConfigParser()
+
+config.read_dict(DEFAULTS)  # cargar valores por defecto primero
+config.read(config_file)
+# Acceder y convertir tipos
+general = config['GENERAL']
+network = config['NETWORK']
+actuator = config['ACTUATOR']
+publicator = config['PUBLICATOR']
+
+#server_address, server_port = q4s_lite.server_address, q4s_lite.server_port
+#client_address, client_port = q4s_lite.client_address, q4s_lite.client_port
+#PUBLICATION_TIME = 3 #segundos
+#PUBLICATION_ALERT_TIME = 1 #segundo
+server_address= network.get('server_address')
+server_port= network.getint('server_port')
+client_address= network.get('client_address')
+client_port= network.getint('client_port')
+PUBLICATION_TIME = publicator.getint('PUBLICATION_TIME')
+#PUBLICATION_ALERT_TIME = publicator.getint('PUBLICATION_ALERT_TIME')
+
 
 def load_password(file_name: str = "password.txt") -> str:
     path = Path(__file__).with_name(file_name)   # mismo directorio que el .py
@@ -20,15 +79,17 @@ def load_password(file_name: str = "password.txt") -> str:
         logging.error("No encuentro %s; saliendo", path)
         sys.exit(1)
 
-LATENCY_ALERT: Final[int] = q4s_lite.LATENCY_ALERT
-PACKET_LOSS_ALERT: Final[float] = q4s_lite.PACKET_LOSS_ALERT
+#LATENCY_ALERT: Final[int] = q4s_lite.LATENCY_ALERT
+#PACKET_LOSS_ALERT: Final[float] = q4s_lite.PACKET_LOSS_ALERT
+LATENCY_ALERT= general.getint('LATENCY_ALERT')
+PACKET_LOSS_ALERT= general.getfloat('PACKET_LOSS_ALERT')
 
 BROKER_HOST: Final[str] = "remotedriver.dit.upm.es"
 BROKER_PORT: Final[int] = 41883
 USERNAME: Final[str] = "nokiatecss"
 PASSWORD: Final[str] = load_password()  
 
-PUBLICATION_TIME: Final[int] = 3  # segundos
+#PUBLICATION_TIME: Final[int] = 3  # segundos
 
 print() # Para separar la salida del logger de la salida estándar
 logger = logging.getLogger("q4s_publicator")
@@ -216,13 +277,22 @@ signal.signal(signal.SIGTERM, graceful_exit)
 
 
 if __name__ == "__main__":
+    if len(sys.argv)==2:
+        config_file = sys.argv[1]
+    else:
+        config_file = "q4s_lite_config.ini"
+
+    if not (os.path.exists(config_file)):
+        print("\n[Q4S Lite CONFIG] Config file not found using default configuration values\n")
+
     _Q4S_NODE = q4s_lite.q4s_lite_node(
         role="server",
-        address=q4s_lite.server_address,
-        port=q4s_lite.server_port,
-        target_address=q4s_lite.client_address,
-        target_port=q4s_lite.client_port,
+        address=server_address,
+        port=server_port,
+        target_address=client_address,
+        target_port=client_port,
         event_publicator=threading.Event(),
+        config_file=config_file
     )
     _Q4S_NODE.run()
 

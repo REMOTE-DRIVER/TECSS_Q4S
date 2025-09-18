@@ -36,19 +36,19 @@ DEFAULTS = {
 
 
 
-if len(sys.argv)==3:
+'''if len(sys.argv)==3:
     config_file = sys.argv[2]
 else:
     config_file = "q4s_lite_config.ini"
 
 if not (os.path.exists(config_file)):
-    print("\n[Q4S Lite CONFIG] Config file not found using default configuration values\n")
+    print("\n[Q4S Lite CONFIG] Config file not found using default configuration values\n")'''
 
 config = configparser.ConfigParser()
 
 # Leer el archivo
 config.read_dict(DEFAULTS)  # cargar valores por defecto primero
-config.read(config_file)      # luego sobrescribir con lo del fichero si existe
+#config.read(config_file)      # luego sobrescribir con lo del fichero si existe
 
 # Acceder y convertir tipos
 general = config['GENERAL']
@@ -65,7 +65,7 @@ client_address= network.get('client_address')
 client_port= network.getint('client_port')
 NO_INIT = general.getboolean('NO_INIT')
 
-print('Q4s_lite Config params')
+'''print('Q4s_lite Config params')
 print("======================")
 print(f"VEHICLE_ID = {VEHICLE_ID}")
 print(f"PACKETS_PER_SECOND = {PACKETS_PER_SECOND}")
@@ -76,7 +76,7 @@ print(f"server_address,server_port = {server_address},{server_port}")
 print(f"client_address,client_port = {client_address},{client_port}")
 
 print("\nQ4s_lite Execution")
-print("======================")
+print("======================")'''
 
 
 
@@ -105,7 +105,7 @@ MODO_STANDALONE = False  #Para indicar que se ejecuta como libreria, solo se pon
 #PACKET_LOSS_ALERT = 0.02 #tanto por 1
 KEEP_ALERT_TIME = max(1,(PACKET_LOSS_PRECISSION / PACKETS_PER_SECOND)) #segundos que estas en estado de alerta a partir del cual vuelve a avisar al actuador, para no avisarle en todos los paquetes
 KEEP_ALERT_TIME_PUBLICATOR = 1
-print(f"KEEP_ALERT_TIME={KEEP_ALERT_TIME}")
+#print(f"KEEP_ALERT_TIME={KEEP_ALERT_TIME}")
 
 #Nueva latencia
 LATENCY_CHECKPOINT = [3,5,7,9]# definen crecimiento y diferencia de latencia, jj recomienda de 3,4,5,6
@@ -153,7 +153,9 @@ client_handler.setFormatter(formatter)
 
 class q4s_lite_node():
 
-    def __init__(self, role, address, port, target_address, target_port, event_publicator=None,event_actuator=None):
+    def __init__(self, role, address, port, target_address, target_port, event_publicator=None,event_actuator=None, config_file=None):
+        if not MODO_STANDALONE:
+            load_config(config_file)
         #El rol importa para iniciar conex o medir up/down
         self.role = role
         #id del flujo a medir
@@ -650,6 +652,51 @@ def printalert(*args, **kwargs):
     if MODO_STANDALONE:
         print(*args, **kwargs)
 
+def load_config(config_file):
+    global VEHICLE_ID,PACKETS_PER_SECOND,PACKET_LOSS_PRECISSION,LATENCY_ALERT,PACKET_LOSS_ALERT, \
+    server_address, server_port, client_address, client_port, NO_INIT, \
+    KEEP_ALERT_TIME, KEEP_ALERT_TIME_PUBLICATO, TIME_BETWEEN_PINGS
+
+    config = configparser.ConfigParser()
+
+    # Leer el archivo
+    #config.read_dict(DEFAULTS)  # cargar valores por defecto primero
+    config.read(config_file)      # luego sobrescribir con lo del fichero si existe
+
+    # Acceder y convertir tipos
+    general = config['GENERAL']
+    network = config['NETWORK']
+
+    VEHICLE_ID= general.get('VEHICLE_ID')#.strip('"')
+    PACKETS_PER_SECOND= general.getint('PACKETS_PER_SECOND')
+    PACKET_LOSS_PRECISSION= general.getint('PACKET_LOSS_PRECISSION')
+    LATENCY_ALERT= general.getint('LATENCY_ALERT')
+    PACKET_LOSS_ALERT= general.getfloat('PACKET_LOSS_ALERT')
+    server_address= network.get('server_address')
+    server_port= network.getint('server_port')
+    client_address= network.get('client_address')
+    client_port= network.getint('client_port')
+    NO_INIT = general.getboolean('NO_INIT')
+
+    print('Q4s_lite Config params')
+    print("======================")
+    print(f"VEHICLE_ID = {VEHICLE_ID}")
+    print(f"PACKETS_PER_SECOND = {PACKETS_PER_SECOND}")
+    print(f"PACKET_LOSS_PRECISSION = {PACKET_LOSS_PRECISSION}")
+    print(f"LATENCY_ALERT = {LATENCY_ALERT}")
+    print(f"PACKET_LOSS_ALERT = {PACKET_LOSS_ALERT}")
+    print(f"server_address,server_port = {server_address},{server_port}")
+    print(f"client_address,client_port = {client_address},{client_port}")
+
+    print("\nQ4s_lite Execution")
+    print("======================")
+
+    KEEP_ALERT_TIME = max(1,(PACKET_LOSS_PRECISSION / PACKETS_PER_SECOND)) #segundos que estas en estado de alerta a partir del cual vuelve a avisar al actuador, para no avisarle en todos los paquetes
+    KEEP_ALERT_TIME_PUBLICATOR = 1
+    print(f"KEEP_ALERT_TIME={KEEP_ALERT_TIME}")
+
+    TIME_BETWEEN_PINGS = 1/PACKETS_PER_SECOND 
+
 if __name__=="__main__":
     main_run = True
     #os.system('cls' if os.name == 'nt' else 'clear')
@@ -657,7 +704,17 @@ if __name__=="__main__":
 
     if len(sys.argv)<2:
         print("Usage")
+
     elif len(sys.argv)==2 or len(sys.argv)==3:
+        if len(sys.argv)==3:
+            config_file = sys.argv[2]
+        else:
+            config_file = "q4s_lite_config.ini"
+
+        if not (os.path.exists(config_file)):
+            print("\n[Q4S Lite CONFIG] Config file not found using default configuration values\n")
+
+        load_config(config_file)
         if sys.argv[1] == "-s":            
             logger.addHandler(server_handler)
             q4s_node = q4s_lite_node("server",server_address, server_port, client_address, client_port)

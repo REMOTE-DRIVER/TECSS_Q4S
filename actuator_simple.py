@@ -1,7 +1,7 @@
 import threading
 import time
 import q4s_lite
-import logging,sys
+import logging,sys, os
 from datetime import datetime
 import socket
 import configparser
@@ -13,18 +13,43 @@ event = threading.Event()
 #Parametros del actuador
 actuator_alive = False
 #actuator_host,actuator_port = "127.0.0.1",8889
-DEFAULTS = {'ACTUATOR':{
-                'actuator_address':'127.0.0.1',
-                'actuator_port':'8889',
-                'insignificant_loses': 0.01,
-                'fuentes': 1,
-                'TAM_POR_FUENTE':250000
-            }}
+DEFAULTS = {
+    'GENERAL': {
+        'VEHICLE_ID': "0001",
+        'PACKETS_PER_SECOND': 30,
+        'PACKET_LOSS_PRECISSION': 100,
+        'LATENCY_ALERT': 150,
+        'PACKET_LOSS_ALERT': 0.02,
+        'NO_INIT': False
+    },
+    'NETWORK': {
+        'server_address': '127.0.0.1',
+        'server_port': 20001,
+        'client_address': '127.0.0.1',
+        'client_port': 20002,
+    },
+    'ACTUATOR':{
+        'actuator_address':'127.0.0.1',
+        'actuator_port':'8889',
+        'insignificant_loses': 0.01,
+        'fuentes': 1,
+        'TAM_POR_FUENTE':250000
+    }
+}
+
+
+if len(sys.argv)==2:
+    config_file = sys.argv[1]
+else:
+    config_file = "q4s_lite_config.ini"
+
+if not (os.path.exists(config_file)):
+    print("\n[Q4S Lite CONFIG] Config file not found using default configuration values\n")
 
 config = configparser.ConfigParser()
 
 config.read_dict(DEFAULTS)  # cargar valores por defecto primero
-config.read("q4s_lite_config.ini")
+config.read(config_file)
 # Acceder y convertir tipos
 general = config['GENERAL']
 network = config['NETWORK']
@@ -36,8 +61,12 @@ insignificant_loses = actuator.getfloat('insignificant_loses')
 FUENTES = actuator.getint('FUENTES')
 TAM_POR_FUENTE = actuator.getint('TAM_POR_FUENTE')
 
-server_address, server_port = q4s_lite.server_address, q4s_lite.server_port#"127.0.0.1",20001
-client_address, client_port = q4s_lite.client_address, q4s_lite.client_port#"127.0.0.1",20002
+#server_address, server_port = q4s_lite.server_address, q4s_lite.server_port#"127.0.0.1",20001
+#client_address, client_port = q4s_lite.client_address, q4s_lite.client_port#"127.0.0.1",20002
+server_address= network.get('server_address')
+server_port= network.getint('server_port')
+client_address= network.get('client_address')
+client_port= network.getint('client_port')
 
 print('\nActuator Config params')
 print("======================")
@@ -60,8 +89,10 @@ client_handler.setLevel(logging.DEBUG)
 client_handler.setFormatter(formatter)
 
 #mejor usar q4s_lite.LATENCY_ALERT
-LATENCY_ALERT = q4s_lite.LATENCY_ALERT#360 #milisegundos
-PACKET_LOSS_ALERT = q4s_lite.PACKET_LOSS_ALERT#0.1#0.02 #2%
+#LATENCY_ALERT = q4s_lite.LATENCY_ALERT#360 #milisegundos
+#PACKET_LOSS_ALERT = q4s_lite.PACKET_LOSS_ALERT#0.1#0.02 #2%
+LATENCY_ALERT= general.getint('LATENCY_ALERT')
+PACKET_LOSS_ALERT= general.getfloat('PACKET_LOSS_ALERT')
 
 #FUENTES = 1
 slot = FUENTES*TAM_POR_FUENTE#250000 #TODO en mayusculas
@@ -111,7 +142,9 @@ def main():
     global actuator_alive
     logger.addHandler(client_handler)
     #El actuador es el cliente por defecto, ya que va en el coche
-    q4s_node = q4s_lite.q4s_lite_node("client",client_address, client_port, server_address, server_port,event_actuator=event)
+    #Aqui se deberian leer las variables globales del fichero
+    #config_file="q4s_lite_config.ini"
+    q4s_node = q4s_lite.q4s_lite_node("client",client_address, client_port, server_address, server_port,event_actuator=event, config_file=config_file)
     q4s_node.run()
     actuator_alive = True
     actuator_thread = threading.Thread(target=actuator,args=(q4s_node,),daemon=True)
