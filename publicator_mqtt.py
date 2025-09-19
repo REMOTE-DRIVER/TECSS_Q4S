@@ -127,8 +127,8 @@ def compute_alert_code(q4s_node: "q4s_lite.q4s_lite_node") -> int:
     # 6: alerta de conexión y latencia
     # 7: alerta de conexión, latencia y pérdida de paquetes
     connection_alert = int(q4s_node.connection_errors > 0)
-    latency_alert = int(q4s_node.latency_combined > LATENCY_ALERT)
-    loss_alert = int(q4s_node.packet_loss_combined > PACKET_LOSS_ALERT)
+    latency_alert = int(q4s_node.latency_combined >= LATENCY_ALERT)
+    loss_alert = int(q4s_node.packet_loss_combined >= PACKET_LOSS_ALERT)
     return (connection_alert << 2) | (latency_alert << 1) | loss_alert
 
 

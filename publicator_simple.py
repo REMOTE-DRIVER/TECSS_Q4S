@@ -97,8 +97,8 @@ def check_alert(q4s_node):
     1                   1           0                6
     1                   1           1                7'''
     connection_alert = int(q4s_node.connection_errors > 0)
-    latency_alert = int(q4s_node.latency_combined > LATENCY_ALERT)
-    packet_loss_alert = int(q4s_node.packet_loss_combined > PACKET_LOSS_ALERT)
+    latency_alert = int(q4s_node.latency_combined >= LATENCY_ALERT)
+    packet_loss_alert = int(q4s_node.packet_loss_combined >= PACKET_LOSS_ALERT)
     
     alert_code = (connection_alert << 2) | (latency_alert << 1) | packet_loss_alert
 
