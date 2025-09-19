@@ -441,7 +441,8 @@ def main():
                 print("2: No pierdas paquetes")
                 print("3: BER de 50000")
                 print("4: BER de 0")
-                print("9: Repetir menu")
+                print("5: Pierde paquetes y Ber")
+                print("6: Corrige TODAS las perdidas")
                 print("0: Atrás")
                 sub_option = input("Elige una opción: ")
 
@@ -457,8 +458,14 @@ def main():
                     send_command(f"SET_BER:50000")
                 elif sub_option == '4':
                     send_command(f"SET_BER:0")
-                elif sub_option == "9":
-                    continue
+                elif sub_option == "5":
+                    q4s_node.packet_loss_decoration += 0.1
+                    send_command(f"SET_LOSS:10")
+                    send_command(f"SET_BER:50000")
+                elif sub_option=="6":
+                    q4s_node.packet_loss_decoration = 0
+                    send_command(f"SET_LOSS:0")
+                    send_command(f"SET_BER:0")
 
 
         elif option == '2':  # Submenú de peticiones al coder
@@ -471,7 +478,6 @@ def main():
                 print("6: Petición BER 0")
                 print("7: Petición SET_LOSS 10")
                 print("8: Petición SET_LOSS 0")
-                print("9: Repetir menu")
                 print("0: Atrás")
                 sub_option = input("Introduce una opción: ")
                 
