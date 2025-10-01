@@ -439,7 +439,7 @@ def main():
             while True:
                 print("\n1: Pierde un 10 por ciento de paquetes")
                 print("2: No pierdas paquetes")
-                print("3: BER de 50000")
+                print("3: BER de 10000")
                 print("4: BER de 0")
                 print("5: Pierde paquetes y Ber")
                 print("6: Corrige TODAS las perdidas")
@@ -455,13 +455,14 @@ def main():
                     q4s_node.packet_loss_decoration = 0
                     send_command(f"SET_LOSS:0")
                 elif sub_option == '3':
-                    send_command(f"SET_BER:50000")
+                    send_command(f"SET_BER:10000")
                 elif sub_option == '4':
                     send_command(f"SET_BER:0")
+                    q4s_node.packet_loss_decoration += 0
                 elif sub_option == "5":
                     q4s_node.packet_loss_decoration += 0.1
                     send_command(f"SET_LOSS:10")
-                    send_command(f"SET_BER:50000")
+                    send_command(f"SET_BER:20000")
                 elif sub_option=="6":
                     q4s_node.packet_loss_decoration = 0
                     send_command(f"SET_LOSS:0")
