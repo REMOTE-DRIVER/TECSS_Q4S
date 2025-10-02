@@ -461,8 +461,8 @@ def main():
                     q4s_node.packet_loss_decoration += 0
                 elif sub_option == "5":
                     q4s_node.packet_loss_decoration += 0.1
-                    send_command(f"SET_LOSS:10")
-                    send_command(f"SET_BER:20000")
+                    #send_command(f"SET_LOSS:10")
+                    send_command(f"SET_BER:10000")
                 elif sub_option=="6":
                     q4s_node.packet_loss_decoration = 0
                     send_command(f"SET_LOSS:0")
