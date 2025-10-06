@@ -748,7 +748,7 @@ if __name__=="__main__":
                     #print("2: Mejora latencia")
                     print("\n1: Pierde un 10 por ciento mas de paquetes")
                     print("2: No pierdas paquetes")
-                    print("0: Atrás")
+                    print("0: Atrás\n")
                     print("\nElige una opción: \n")
                     sub_option = input()                   
 
