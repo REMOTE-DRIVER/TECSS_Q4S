@@ -17,7 +17,9 @@ DEFAULTS = {
         'PACKET_LOSS_PRECISSION': 100,
         'LATENCY_ALERT': 150,
         'PACKET_LOSS_ALERT': 0.02,
-        'NO_INIT': False
+        'NO_INIT': False,
+        'OFFSET':0,
+        'MEASURES_COMBINATION_ESTRATEGY':0
     },
     'NETWORK': {
         'server_address': '127.0.0.1',

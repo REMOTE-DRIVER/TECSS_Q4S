@@ -24,7 +24,9 @@ DEFAULTS = {
         'PACKET_LOSS_PRECISSION': 100,
         'LATENCY_ALERT': 150,
         'PACKET_LOSS_ALERT': 0.02,
-        'NO_INIT': False
+        'NO_INIT': False,
+        'OFFSET':0,
+        'MEASURES_MIXTURE_ESTRATEGY':0
     },
     'NETWORK': {
         'server_address': '127.0.0.1',
@@ -64,6 +66,8 @@ server_port= network.getint('server_port')
 client_address= network.get('client_address')
 client_port= network.getint('client_port')
 NO_INIT = general.getboolean('NO_INIT')
+OFFSET = general.getint('OFFSET')
+MEASURES_COMBINATION_ESTRATEGY = general.getint('MEASURES_COMBINATION_ESTRATEGY')
 
 '''print('Q4s_lite Config params')
 print("======================")
@@ -119,8 +123,8 @@ MEASURE_COMBINATIONS = [lambda x,y,z: (x+y)/2,
                         lambda x,y,z:max(x,y),
                         lambda x,y,z:min(x,y),
                         lambda x,y,z: x if z=="client" else y]
-MEASURE_COMBINATION_STRATEGY = 0
-COMBINED_FUNC = MEASURE_COMBINATIONS[MEASURE_COMBINATION_STRATEGY]
+
+COMBINED_FUNC = MEASURE_COMBINATIONS[MEASURES_COMBINATION_STRATEGY]
 
 #Tiempo en segundos para medir los errores de conexion
 CONNECTION_ERROR_TIME_MARGIN = 1
@@ -656,7 +660,7 @@ def printalert(*args, **kwargs):
 def load_config(config_file):
     global VEHICLE_ID,PACKETS_PER_SECOND,PACKET_LOSS_PRECISSION,LATENCY_ALERT,PACKET_LOSS_ALERT, \
     server_address, server_port, client_address, client_port, NO_INIT, \
-    KEEP_ALERT_TIME, KEEP_ALERT_TIME_PUBLICATO, TIME_BETWEEN_PINGS
+    KEEP_ALERT_TIME, KEEP_ALERT_TIME_PUBLICATO, TIME_BETWEEN_PINGS,MEASURES_COMBINATION_ESTRATEGY,COMBINED_FUNC
 
     config = configparser.ConfigParser()
 
@@ -678,6 +682,11 @@ def load_config(config_file):
     client_address= network.get('client_address')
     client_port= network.getint('client_port')
     NO_INIT = general.getboolean('NO_INIT')
+    MEASURES_COMBINATION_ESTRATEGY = general.getint('MEASURES_COMBINATION_ESTRATEGY')
+    '''
+    OFFSET
+    MEASURES_MIXTURE_ESTRATEGY
+    '''
 
     print('Q4s_lite Config params')
     print("======================")
@@ -688,6 +697,8 @@ def load_config(config_file):
     print(f"PACKET_LOSS_ALERT = {PACKET_LOSS_ALERT}")
     print(f"server_address,server_port = {server_address},{server_port}")
     print(f"client_address,client_port = {client_address},{client_port}")
+    print(f"MEASURES_COMBINATION_ESTRATEGY = {MEASURES_COMBINATION_ESTRATEGY}")
+
 
     print("\nQ4s_lite Execution")
     print("======================")
@@ -697,6 +708,8 @@ def load_config(config_file):
     print(f"KEEP_ALERT_TIME={KEEP_ALERT_TIME}")
 
     TIME_BETWEEN_PINGS = 1/PACKETS_PER_SECOND 
+
+    COMBINED_FUNC = MEASURE_COMBINATIONS[MEASURES_COMBINATION_STRATEGY]
 
 if __name__=="__main__":
     main_run = True
