@@ -26,7 +26,7 @@ DEFAULTS = {
         'PACKET_LOSS_ALERT': 0.02,
         'NO_INIT': False,
         'OFFSET':0,
-        'MEASURES_MIXTURE_ESTRATEGY':0
+        'MEASURES_COMBINATION_STRATEGY':0
     },
     'NETWORK': {
         'server_address': '127.0.0.1',
@@ -67,7 +67,7 @@ client_address= network.get('client_address')
 client_port= network.getint('client_port')
 NO_INIT = general.getboolean('NO_INIT')
 OFFSET = general.getint('OFFSET')
-MEASURES_COMBINATION_ESTRATEGY = general.getint('MEASURES_COMBINATION_ESTRATEGY')
+MEASURES_COMBINATION_STRATEGY = general.getint('MEASURES_COMBINATION_STRATEGY')
 
 '''print('Q4s_lite Config params')
 print("======================")
@@ -87,8 +87,11 @@ print("======================")'''
 
 #Paquete con tipo_mensaje,num secuencia, timestamp, latencia_up/down, jitter_up/down, packet_loss_up/down 
 #Tipos de mensaje: SYN, ACK, PING, RESP, DISC
-PACKET_FORMAT = ">4sidffffffi"  # Formato de los datos
-PACKET_SIZE = 52 #bytes
+#PACKET_FORMAT = ">4sidffffffi"  # Formato de los datos
+#PACKET_SIZE = 52 #bytes
+
+PACKET_FORMAT = f">4sidffffffi{OFFSET}s"  # Formato de los datos
+PACKET_SIZE = 52 + OFFSET #bytes
 
 MSG_FORMAT = 'utf-8'
 ack_message = "ACK".ljust(4).encode(MSG_FORMAT)
@@ -217,6 +220,8 @@ class q4s_lite_node():
         #Deterioro de latencias y descarte de paquetes
         self.latency_decoration = 0
         self.packet_loss_decoration = 0
+        #Offset del paquete para pruebas
+        self.offset = b"A" * OFFSET
 
     def init_connection_server(self):
         logger.info("[INIT CONNECTION] SERVER: Waiting for connection")
@@ -235,7 +240,7 @@ class q4s_lite_node():
                         decoded_identifier = decode_identifier(self.flow_id)
                         logger.info(f"[INIT CONNECTION] SERVER: Vehicle id: {decoded_identifier}")
                         #Responde al syn con ack
-                        packet_data=(ack_message,0,time.time(),0.0,0.0,0.0,0.0,0.0,0.0,self.flow_id)
+                        packet_data=(ack_message,0,time.time(),0.0,0.0,0.0,0.0,0.0,0.0,self.flow_id,self.offset)
                         datos = struct.pack(PACKET_FORMAT,*packet_data)
                         self.socket.sendto(datos,self.target_address)
                         #Ahora espero el ack de vuelta
@@ -268,7 +273,7 @@ class q4s_lite_node():
         while retries < INIT_CONNECTION_TRIES: #while True para que lo intente hasta que pueda
         #while True:
             try:
-                packet_data=(syn_message,0,time.time(),0.0,0.0,0.0,0.0,0.0,0.0,self.flow_id)
+                packet_data=(syn_message,0,time.time(),0.0,0.0,0.0,0.0,0.0,0.0,self.flow_id,self.offset)
                 datos = struct.pack(PACKET_FORMAT,*packet_data)
                 self.socket.sendto(datos,self.target_address)
 
@@ -278,7 +283,7 @@ class q4s_lite_node():
                 message_type = data_rcvd[0].decode(MSG_FORMAT).strip()
                 if "ACK" in message_type:
                     #Responde ack, se le envia otro ack
-                    packet_data=(ack_message,0,time.time(),0.0,0.0,0.0,0.0,0.0,0.0,self.flow_id)
+                    packet_data=(ack_message,0,time.time(),0.0,0.0,0.0,0.0,0.0,0.0,self.flow_id,self.offset)
                     datos = struct.pack(PACKET_FORMAT,*packet_data)
                     self.socket.sendto(datos,self.target_address)
                     logger.info(f"[INIT CONNECTION] CLIENT: Conexion establecida ha tardado {timestamp_recepcion-timestamp} segundos")
@@ -420,7 +425,8 @@ class q4s_lite_node():
                 self.jitter_down,
                 self.packet_loss_up,
                 self.packet_loss_down,
-                self.flow_id
+                self.flow_id,
+                self.offset
                 )
             packet = struct.pack(PACKET_FORMAT, *packet_data)
             try:
@@ -660,7 +666,8 @@ def printalert(*args, **kwargs):
 def load_config(config_file):
     global VEHICLE_ID,PACKETS_PER_SECOND,PACKET_LOSS_PRECISSION,LATENCY_ALERT,PACKET_LOSS_ALERT, \
     server_address, server_port, client_address, client_port, NO_INIT, \
-    KEEP_ALERT_TIME, KEEP_ALERT_TIME_PUBLICATO, TIME_BETWEEN_PINGS,MEASURES_COMBINATION_ESTRATEGY,COMBINED_FUNC
+    KEEP_ALERT_TIME, KEEP_ALERT_TIME_PUBLICATO, TIME_BETWEEN_PINGS,MEASURES_COMBINATION_STRATEGY,COMBINED_FUNC, \
+    PACKET_FORMAT, PACKET_SIZE, OFFSET
 
     config = configparser.ConfigParser()
 
@@ -682,11 +689,8 @@ def load_config(config_file):
     client_address= network.get('client_address')
     client_port= network.getint('client_port')
     NO_INIT = general.getboolean('NO_INIT')
-    MEASURES_COMBINATION_ESTRATEGY = general.getint('MEASURES_COMBINATION_ESTRATEGY')
-    '''
-    OFFSET
-    MEASURES_MIXTURE_ESTRATEGY
-    '''
+    MEASURES_COMBINATION_STRATEGY = general.getint('MEASURES_COMBINATION_STRATEGY')
+    OFFSET = general.getint('OFFSET')
 
     print('Q4s_lite Config params')
     print("======================")
@@ -697,7 +701,8 @@ def load_config(config_file):
     print(f"PACKET_LOSS_ALERT = {PACKET_LOSS_ALERT}")
     print(f"server_address,server_port = {server_address},{server_port}")
     print(f"client_address,client_port = {client_address},{client_port}")
-    print(f"MEASURES_COMBINATION_ESTRATEGY = {MEASURES_COMBINATION_ESTRATEGY}")
+    print(f"MEASURES_COMBINATION_STRATEGY = {MEASURES_COMBINATION_STRATEGY}")
+    print(f"OFFSET = {OFFSET}" )
 
 
     print("\nQ4s_lite Execution")
@@ -710,6 +715,9 @@ def load_config(config_file):
     TIME_BETWEEN_PINGS = 1/PACKETS_PER_SECOND 
 
     COMBINED_FUNC = MEASURE_COMBINATIONS[MEASURES_COMBINATION_STRATEGY]
+
+    PACKET_FORMAT = f">4sidffffffi{OFFSET}s"  # Formato de los datos
+    PACKET_SIZE = 52 + OFFSET #bytes
 
 if __name__=="__main__":
     main_run = True

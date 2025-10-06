@@ -19,7 +19,7 @@ DEFAULTS = {
         'PACKET_LOSS_ALERT': 0.02,
         'NO_INIT': False,
         'OFFSET':0,
-        'MEASURES_COMBINATION_ESTRATEGY':0
+        'MEASURES_COMBINATION_STRATEGY':0
     },
     'NETWORK': {
         'server_address': '127.0.0.1',
