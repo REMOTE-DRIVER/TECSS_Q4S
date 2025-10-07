@@ -93,11 +93,10 @@ PASSWORD: Final[str] = load_password()
 #PUBLICATION_TIME: Final[int] = 3  # segundos
 
 print() # Para separar la salida del logger de la salida estándar
-
 logger = logging.getLogger("q4s_publicator")
 logger.setLevel(logging.INFO)
 _formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
-_console_hdl = logging.StreamHandler(sys.stderr)
+_console_hdl = logging.StreamHandler(sys.stderr)  # stderr para separar de stdout
 _console_hdl.setFormatter(_formatter)
 logger.addHandler(_console_hdl)
 logger.addHandler(logging.FileHandler("publicador_mqtt.log", mode="w", encoding="utf-8"))
@@ -166,7 +165,13 @@ def measures_publisher(q4s_node: "q4s_lite.q4s_lite_node", mqttc: mqtt.Client,
     while running_evt.is_set():
         if not connected_evt.wait(timeout=1):
             continue
-        payload = (f"lat={q4s_node.latency_combined:.10f};jit={q4s_node.jitter_combined:.3f};pl={q4s_node.packet_loss_combined:.3f};conn={q4s_node.connection_errors}")
+        payload = (
+            f"lat={q4s_node.latency_combined:.10f};"
+            f"jit={q4s_node.jitter_combined:.3f};"
+            f"pl={q4s_node.packet_loss_combined:.3f};"
+            f"conn={q4s_node.connection_errors}"
+        )
+        # payload = (f"lat={q4s_node.latency_combined:.10f};jit={q4s_node.jitter_combined:.3f};pl={q4s_node.packet_loss_combined:.3f};conn={q4s_node.connection_errors}")
         mqttc.publish(topic, payload)
         print() 
         logger.debug("[PUB] %s -> %s", topic, payload)
@@ -175,7 +180,6 @@ def measures_publisher(q4s_node: "q4s_lite.q4s_lite_node", mqttc: mqtt.Client,
         while running_evt.is_set() and sleep_left > 0:
             time.sleep(min(0.5, sleep_left))
             sleep_left -= 0.5
-        logger.info("[PUB] %s -> %s", topic, payload)
 
 
 def alerts_publisher(q4s_node: "q4s_lite.q4s_lite_node", mqttc: mqtt.Client,
@@ -207,9 +211,9 @@ def alerts_publisher(q4s_node: "q4s_lite.q4s_lite_node", mqttc: mqtt.Client,
             f"pl={q4s_node.packet_loss_combined:.3f};"
             f"conn={q4s_node.connection_errors}"
         )'''
-        #payload = (f"level={alert_level}")#;code={alert_code};explicación={explanation};lat={q4s_node.latency_combined:.10f};jit={q4s_node.jitter_combined:.3f};pl={q4s_node.packet_loss_combined:.3f};conn={q4s_node.connection_errors}")
-        payload = (f"{alert_code}:{explanation}")#;code={alert_code};explicación={explanation};lat={q4s_node.latency_combined:.10f};jit={q4s_node.jitter_combined:.3f};pl={q4s_node.packet_loss_combined:.3f};conn={q4s_node.connection_errors}")
-        mqttc.publish(topic, payload.encode(), qos=1, retain=False)
+        payload = f"{alert_code}{alert_level}:{explanation}"
+        topic = f"RD/{decode_identifier(q4s_node.flow_id)}/QoS_alert"
+        mqttc.publish(topic, payload)
         print() 
         logger.info("[ALERT] %s -> %s", topic, payload)
 
