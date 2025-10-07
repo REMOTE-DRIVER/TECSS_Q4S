@@ -11,7 +11,6 @@ import configparser
 
 import q4s_lite
 from paho.mqtt import client as mqtt
-from paho.mqtt.enums import CallbackAPIVersion
 
 
 DEFAULTS = {
@@ -89,15 +88,16 @@ PACKET_LOSS_ALERT= general.getfloat('PACKET_LOSS_ALERT')
 BROKER_HOST: Final[str] = "remotedriver.dit.upm.es"
 BROKER_PORT: Final[int] = 41883
 USERNAME: Final[str] = "nokiatecss"
-PASSWORD: Final[str] = load_password()  
+PASSWORD: Final[str] = load_password()
 
 #PUBLICATION_TIME: Final[int] = 3  # segundos
 
 print() # Para separar la salida del logger de la salida estándar
+
 logger = logging.getLogger("q4s_publicator")
 logger.setLevel(logging.INFO)
 _formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
-_console_hdl = logging.StreamHandler(sys.stderr)  # stderr para separar de stdout
+_console_hdl = logging.StreamHandler(sys.stderr)
 _console_hdl.setFormatter(_formatter)
 logger.addHandler(_console_hdl)
 logger.addHandler(logging.FileHandler("publicador_mqtt.log", mode="w", encoding="utf-8"))
@@ -166,13 +166,8 @@ def measures_publisher(q4s_node: "q4s_lite.q4s_lite_node", mqttc: mqtt.Client,
     while running_evt.is_set():
         if not connected_evt.wait(timeout=1):
             continue
-        payload = (
-            f"lat={q4s_node.latency_combined:.10f};"
-            f"jit={q4s_node.jitter_combined:.3f};"
-            f"pl={q4s_node.packet_loss_combined:.3f};"
-            f"conn={q4s_node.connection_errors}"
-        )
-        mqttc.publish(topic, payload, qos=1, retain=False)
+        payload = (f"lat={q4s_node.latency_combined:.10f};jit={q4s_node.jitter_combined:.3f};pl={q4s_node.packet_loss_combined:.3f};conn={q4s_node.connection_errors}")
+        mqttc.publish(topic, payload)
         print() 
         logger.debug("[PUB] %s -> %s", topic, payload)
 
@@ -184,7 +179,6 @@ def measures_publisher(q4s_node: "q4s_lite.q4s_lite_node", mqttc: mqtt.Client,
 
 def alerts_publisher(q4s_node: "q4s_lite.q4s_lite_node", mqttc: mqtt.Client,
                      connected_evt: threading.Event, running_evt: threading.Event) -> None:
-    topic = f"RD/{decode_identifier(q4s_node.flow_id)}/QoS_alert"
     while running_evt.is_set():
         if not q4s_node.event_publicator.wait(timeout=1):
             continue
@@ -203,7 +197,7 @@ def alerts_publisher(q4s_node: "q4s_lite.q4s_lite_node", mqttc: mqtt.Client,
         elif q4s_node.state[0]=="normal":  # Si te despiertan y el estado es normal, es un recovery
             alert_level = 3  # recovery
             explanation = "recovery"
-        payload = (
+        """payload = (
             f"level={alert_level};"
             f"code={alert_code};"
             f"explicación={explanation};"
@@ -211,46 +205,37 @@ def alerts_publisher(q4s_node: "q4s_lite.q4s_lite_node", mqttc: mqtt.Client,
             f"jit={q4s_node.jitter_combined:.3f};"
             f"pl={q4s_node.packet_loss_combined:.3f};"
             f"conn={q4s_node.connection_errors}"
-        )
-        mqttc.publish(topic, payload, qos=1, retain=False)
+        )"""
+        payload = f"{alert_code}{alert_level}:{explanation}"
+        topic = f"RD/{decode_identifier(q4s_node.flow_id)}/QoS_alert"
+        mqttc.publish(f"RD/{decode_identifier(q4s_node.flow_id)}/QoS_alert", f"{alert_code}{alert_level}:{explanation}")
         print() 
         logger.info("[ALERT] %s -> %s", topic, payload)
 
 
-def on_connect(client: mqtt.Client, userdata, flags, reason_code, properties):
-    # MQTT v5 ⇒ reason_code es objeto ReasonCodes.  En v3.1.1 sería un int.
-    rc_val = getattr(reason_code, "value", reason_code)      # int 0-255
-    rc_name = getattr(reason_code, "getName", lambda: rc_val)()
+def on_connect(client: mqtt.Client, userdata, flags, rc):
+    print()
 
-    print()  # rompe la línea viva de medidas
-
-    if rc_val == 0:
-        logger.info("Conectado a %s:%s (RC=%s)", BROKER_HOST, BROKER_PORT, rc_name)
+    if rc == 0:
+        logger.info("Conectado a %s:%s (RC=%s)", BROKER_HOST, BROKER_PORT, rc)
         _CONNECTED_EVENT.set()
 
-        # Publica 'online' sólo cuando la sesión ya está operativa
+        # Publica 'online' cuando la sesión está operativa
         topic = f"RD/{client._client_id.decode()}/status"
-        client.publish(topic, "online", qos=1, retain=False)
+        client.publish(topic, "online")
     else:
-        logger.error("Fallo al conectar (RC=%s)", rc_name)
+        logger.error("Fallo al conectar (RC=%s)", rc)
         _CONNECTED_EVENT.clear()
 
 
-def on_disconnect(client: mqtt.Client, _userdata, _flags, reason_code, _properties):
+def on_disconnect(client: mqtt.Client, userdata, rc):
     print() 
-    logger.warning("Desconectado (reason=%s)", reason_code)
+    logger.warning("Desconectado (rc=%s)", rc)
     _CONNECTED_EVENT.clear()
 
-def on_publish(client, userdata, mid, reason_code, properties):
-    # MQTT v5 → reason_code es objeto ReasonCodes.  Si fuera v3.1.1, es int.
-    code_val = getattr(reason_code, "value", reason_code)  # int 0-255
 
-    if code_val >= 128:   # sólo errores “negativos”
-        logger.error("PUB mid=%s rechazado (RC=%s – %s)",
-                     mid, code_val, reason_code.getName())
-    else:
-        logger.debug("PUB mid=%s RC=%s – %s",
-                     mid, code_val, reason_code.getName())
+def on_publish(client, userdata, mid):
+    logger.debug("PUB mid=%s enviado correctamente", mid)
 
 
 _RUNNING_EVENT = threading.Event()
@@ -263,7 +248,7 @@ def graceful_exit(_: int | None = None, __: object | None = None):
     _RUNNING_EVENT.clear()
     try:
         if _CONNECTED_EVENT.is_set():
-            _MQTT_CLIENT.publish(f"RD/{_MQTT_CLIENT._client_id.decode()}/status", "offline", qos=1, retain=False)
+            _MQTT_CLIENT.publish(f"RD/{_MQTT_CLIENT._client_id.decode()}/status", "offline")
             time.sleep(0.2)
         _MQTT_CLIENT.loop_stop()
         _MQTT_CLIENT.disconnect()
@@ -276,7 +261,6 @@ def graceful_exit(_: int | None = None, __: object | None = None):
 
 signal.signal(signal.SIGINT, graceful_exit)
 signal.signal(signal.SIGTERM, graceful_exit)
-
 
 if __name__ == "__main__":
     if len(sys.argv)==2:
@@ -298,29 +282,26 @@ if __name__ == "__main__":
     )
     _Q4S_NODE.run()
 
-    client_id = f"q4s_{decode_identifier(_Q4S_NODE.flow_id)}"
-
-    flow_txt = decode_identifier(_Q4S_NODE.flow_id)  # '7777'
+    flow_txt = decode_identifier(_Q4S_NODE.flow_id)
     client_id = f"q4s_{flow_txt}" 
 
-    _MQTT_CLIENT = mqtt.Client(
-    client_id=client_id,
-    protocol=mqtt.MQTTv5,
-    callback_api_version=CallbackAPIVersion.VERSION2,
-)
+    _MQTT_CLIENT = mqtt.Client(client_id=client_id)
+    
     _MQTT_CLIENT.username_pw_set(USERNAME, PASSWORD)
     _MQTT_CLIENT.on_connect = on_connect
     _MQTT_CLIENT.on_disconnect = on_disconnect
     _MQTT_CLIENT.on_publish = on_publish
+    
     _MQTT_CLIENT.will_set(f"RD/{client_id}/status", "offline", qos=1, retain=False)
+    
     _MQTT_CLIENT.reconnect_delay_set(1, 60)
     
-    _MQTT_CLIENT.connect_async(
-    BROKER_HOST,
-    BROKER_PORT,
-    keepalive=60,
-    clean_start=mqtt.MQTT_CLEAN_START_FIRST_ONLY,
-    )
+    try:
+        _MQTT_CLIENT.connect(BROKER_HOST, BROKER_PORT, keepalive=10000)
+    except Exception as e:
+        logger.error("Error al conectar con el broker MQTT: %s", e)
+        sys.exit(1)
+    
     _MQTT_CLIENT.loop_start()
 
     _RUNNING_EVENT.set()

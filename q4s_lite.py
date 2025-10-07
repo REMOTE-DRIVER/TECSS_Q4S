@@ -777,7 +777,7 @@ if __name__=="__main__":
                 while q4s_node.running:#Aqui se puede poner menu de control con simulacion de perdidas etc...
                     print("\n1: Pierde un 10 por ciento mas de paquetes")
                     print("2: No pierdas paquetes")
-                    print("0: Atrás")
+                    print("0: Atrás\n")
                     print("\nElige una opción: \n")
                     sub_option = input() 
 
