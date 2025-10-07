@@ -180,6 +180,7 @@ def measures_publisher(q4s_node: "q4s_lite.q4s_lite_node", mqttc: mqtt.Client,
         while running_evt.is_set() and sleep_left > 0:
             time.sleep(min(0.5, sleep_left))
             sleep_left -= 0.5
+        logger.info("[PUB] %s -> %s", topic, payload)
 
 
 def alerts_publisher(q4s_node: "q4s_lite.q4s_lite_node", mqttc: mqtt.Client,
