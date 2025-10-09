@@ -165,13 +165,7 @@ def measures_publisher(q4s_node: "q4s_lite.q4s_lite_node", mqttc: mqtt.Client,
     while running_evt.is_set():
         if not connected_evt.wait(timeout=1):
             continue
-        payload = (
-            f"lat={q4s_node.latency_combined:.10f};"
-            f"jit={q4s_node.jitter_combined:.3f};"
-            f"pl={q4s_node.packet_loss_combined:.3f};"
-            f"conn={q4s_node.connection_errors}"
-        )
-        # payload = (f"lat={q4s_node.latency_combined:.10f};jit={q4s_node.jitter_combined:.3f};pl={q4s_node.packet_loss_combined:.3f};conn={q4s_node.connection_errors}")
+        payload = (f"{q4s_node.latency_combined:.10f};{q4s_node.jitter_combined:.3f};{q4s_node.packet_loss_combined:.3f};{q4s_node.connection_errors}")
         mqttc.publish(topic, payload)
         print() 
         logger.debug("[PUB] %s -> %s", topic, payload)
@@ -202,16 +196,8 @@ def alerts_publisher(q4s_node: "q4s_lite.q4s_lite_node", mqttc: mqtt.Client,
         elif q4s_node.state[0]=="normal":  # Si te despiertan y el estado es normal, es un recovery
             alert_level = 3  # recovery
             explanation = "recovery"
-        '''payload = (
-            f"level={alert_level};"
-            f"code={alert_code};"
-            f"explicación={explanation};"
-            f"lat={q4s_node.latency_combined:.10f};"
-            f"jit={q4s_node.jitter_combined:.3f};"
-            f"pl={q4s_node.packet_loss_combined:.3f};"
-            f"conn={q4s_node.connection_errors}"
-        )'''
-        payload = f"{alert_code}{alert_level}:{explanation}"
+        # alertacódigo:explicación;latencia;jitter;pérdida de paquetes;errores de conexión
+        payload = f"{alert_level}{alert_code}:{explanation};{q4s_node.latency_combined:.10f};{q4s_node.jitter_combined:.3f};{q4s_node.packet_loss_combined:.3f};{q4s_node.connection_errors}"
         topic = f"RD/{decode_identifier(q4s_node.flow_id)}/QoS_alert"
         mqttc.publish(topic, payload)
         print() 
