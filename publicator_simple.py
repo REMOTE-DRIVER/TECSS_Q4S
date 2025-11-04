@@ -130,7 +130,7 @@ def measures_publicator(q4s_node):
         time.sleep(PUBLICATION_TIME)
 
 
-def main():
+def main(server_port = server_port):
     global publicator_alive
     logger.addHandler(client_handler)
     #El actuador es el server por defecto, ya que va en el proxy de video

@@ -27,8 +27,7 @@ DEFAULTS = {
         'PACKET_LOSS_ALERT': 0.02,
         'NO_INIT': False,
         'OFFSET':0,
-        'MEASURES_COMBINATION_STRATEGY':0,
-        'REAL_SCENARIO': False
+        'MEASURES_COMBINATION_STRATEGY':0
     },
     'NETWORK': {
         'server_address': '127.0.0.1',
@@ -70,7 +69,6 @@ client_port= network.getint('client_port')
 NO_INIT = general.getboolean('NO_INIT')
 OFFSET = general.getint('OFFSET')
 MEASURES_COMBINATION_STRATEGY = general.getint('MEASURES_COMBINATION_STRATEGY')
-REAL_SCENARIO = general.getboolean('REAL_SCENARIO')
 
 '''print('Q4s_lite Config params')
 print("======================")
@@ -212,7 +210,7 @@ class q4s_lite_node():
         self.first_packet = False
         self.packets_received = [0] * PACKET_LOSS_PRECISSION
         self.total_received = PACKET_LOSS_PRECISSION
-        self.max_transit_packets = PACKETS_PER_SECOND//5
+        self.max_transit_packets = 0#int(PACKETS_PER_SECOND)
         #state
         self.state=[None,None,None] #Es una tupla de nombre estado, timestamp cuando se puso en actuador y timestamp cuando se puso en publicador, ver si la alerta es larga
         #lock para acceso critico
@@ -225,25 +223,16 @@ class q4s_lite_node():
         self.packet_loss_decoration = 0
         #Offset del paquete para pruebas
         self.offset = b"A" * OFFSET
+        #Mejora packet loss
+        self.lost = 0
+        self.sent = 0
+        self.in_transit = 0
+        self.lost2 = 0
+        self.last_seq = 0
+        self.index_look = 0
 
-        #Se printan los parametros de la pila
-        print('Q4s_lite Config params')
-        print("======================")
-        print(f"VEHICLE_ID = {VEHICLE_ID}")
-        print(f"PACKETS_PER_SECOND = {PACKETS_PER_SECOND}")
-        print(f"PACKET_LOSS_PRECISSION = {PACKET_LOSS_PRECISSION}")
-        print(f"LATENCY_ALERT = {LATENCY_ALERT}")
-        print(f"PACKET_LOSS_ALERT = {PACKET_LOSS_ALERT}")
-        print(f"server_address,server_port = {server_address},{server_port}")
-        print(f"client_address = {client_address}")
-        print(f"MEASURES_COMBINATION_STRATEGY = {MEASURES_COMBINATION_STRATEGY}")
-        print(f"OFFSET = {OFFSET}" )
-        print(f"KEEP_ALERT_TIME={KEEP_ALERT_TIME}")
-        print(f"REAL_SCENARIO = {REAL_SCENARIO}")
-
-        print("\nQ4s_lite Execution")
-        print("======================")
-
+        #TODO AQUI se printarian los datos reales de cada pila
+        print(f"Precission:{PACKET_LOSS_PRECISSION}")
 
     def init_connection_server(self):
         logger.info("[INIT CONNECTION] SERVER: Waiting for connection")
@@ -399,7 +388,7 @@ class q4s_lite_node():
 
 
     @staticmethod
-    def get_metrics(reception_time,sent_time,last_latency,total_received):
+    def get_metrics(reception_time,sent_time,last_latency,total_received,transit_packets,lost,sent,in_transit,lost2):
         global UP_INDEX,DOWN_INDEX
         new_latency = ((reception_time-sent_time)*1000)/2 #rtt/2
         jitter = abs(new_latency-last_latency) #El valor absoluto TODO restar la original, no la smoothed
@@ -425,8 +414,40 @@ class q4s_lite_node():
             DOWN_INDEX = 0
 
         #loss
-        #print(f"total received:{total_received:4d}", end="\r")
-        loss=((PACKET_LOSS_PRECISSION-total_received)/PACKET_LOSS_PRECISSION)
+        #loss=((PACKET_LOSS_PRECISSION-total_received)/PACKET_LOSS_PRECISSION)
+        #loss=(((PACKET_LOSS_PRECISSION-transit_packets)-total_received)/(PACKET_LOSS_PRECISSION-transit_packets))
+        #loss = 1 - ((PACKET_LOSS_PRECISSION-(1-total_received)/PACKET_LOSS_PRECISSION))
+        
+        '''
+        try:
+            print(f"loss = 1 - (({sent}-{lost})/{sent}) = {1 - ((sent-lost)/sent)}", end="\r")
+            loss = 1 - ((sent-lost)/sent)
+        except ZeroDivisionError:
+            print(f"loss = 1 - (({sent}-{lost})/1) = {1 - ((sent-lost)/1)}", end="\r")
+            loss = 1 - ((sent-lost)/1)
+        '''
+        #'''
+        try:
+            #print(f"loss = 1 - (({PACKET_LOSS_PRECISSION}-{lost:4d})/{PACKET_LOSS_PRECISSION}) = {1 - ((PACKET_LOSS_PRECISSION-lost)/PACKET_LOSS_PRECISSION)}", end="\r")
+            loss = 1 - ((PACKET_LOSS_PRECISSION-lost)/PACKET_LOSS_PRECISSION)
+        except ZeroDivisionError:
+            #print(f"loss = 1 - (({PACKET_LOSS_PRECISSION}-{lost:4d})/1) = {1 - ((PACKET_LOSS_PRECISSION-lost)/1)}", end="\r")
+            loss = 1 - ((PACKET_LOSS_PRECISSION-lost)/1)
+        #'''
+        '''
+        try:
+            #print(f"loss = 1 - ((({PACKET_LOSS_PRECISSION}-{transit_packets})-{lost})/({PACKET_LOSS_PRECISSION}-{transit_packets})) = {1 - (((PACKET_LOSS_PRECISSION-transit_packets)-lost)/(PACKET_LOSS_PRECISSION-transit_packets))}", end="\r")
+            loss = 1 - (((PACKET_LOSS_PRECISSION-transit_packets)-lost)/(PACKET_LOSS_PRECISSION-transit_packets))
+        except ZeroDivisionError:
+            #print(f"loss = 1 - ((({PACKET_LOSS_PRECISSION}-{transit_packets})-{lost})/({PACKET_LOSS_PRECISSION}-{transit_packets})) = {1 - (((PACKET_LOSS_PRECISSION-transit_packets)-lost)/1)}", end="\r")
+            loss = 1 - (((PACKET_LOSS_PRECISSION-transit_packets)-lost)/1)  
+        ''' 
+
+
+
+
+        #loss = lost/sent-in_transit
+        #TODO se puede cambiar la formula con los paquetes enviados - recibidos / enviados siendo enviados = enviados-transito
         #TODO por configuracion se puede ver si se divide la loss por 2
         #loss=loss/2
         #print("\nPerdidas ",total_received, loss)
@@ -434,12 +455,6 @@ class q4s_lite_node():
             loss = 0
         #print("\nPerdidas ",total_received, loss)
         #print(smothed_latency,jitter,loss)
-        if loss>=1:
-            loss = 1
-        elif REAL_SCENARIO == False: 
-            '''Esta formula solo es valida cuando las perdidas son aleatorias, simetricas e independientes, como las perdidas
-            simuladas con clumsy'''
-            loss = 1.0 - (1.0 - loss)**0.5
         return smoothed_latency,jitter,loss
 
     def measurement_send_ping(self):
@@ -466,55 +481,45 @@ class q4s_lite_node():
                     self.socket.sendto(packet, self.target_address)
                 elif self.packet_loss_decoration>0:
                     #if not (self.seq_number % int(100*self.packet_loss_decoration) > 0):
-                    #if self.seq_number % int(1/self.packet_loss_decoration) != 0:
-                    if random.random()>self.packet_loss_decoration:
+                    if self.seq_number % int(1/self.packet_loss_decoration) != 0:
+                    #if random.random()>self.packet_loss_decoration:
                         self.socket.sendto(packet, self.target_address)
                     #else:
                         #print(f"\nPaquete no enviado {self.seq_number}")
                 #self.socket.sendto(packet, self.target_address)
                 logger.debug(f"[MEASURING SEND PING] n_seq:{packet_data[1]}: lat_up:{packet_data[3]} lat_down:{packet_data[4]} jit_up:{packet_data[5]} jit_down:{packet_data[6]} pl_up:{packet_data[7]} pl_down:{packet_data[8]}")
                 with self.lock:
-                    '''if self.role == "server":
-                        self.max_transit_packets = math.ceil((self.latency_down*1000)*PACKETS_PER_SECOND)
-                    else:
-                        self.max_transit_packets = math.ceil((self.latency_up*1000)*PACKETS_PER_SECOND)
-                    '''
-                    '''min_window = 1
-                    max_window = PACKET_LOSS_PRECISSION - 1
-                    if self.role == "server":
-                        latency_ms = self.latency_down
-                    else:
-                        latency_ms = self.latency_up
-                    latency_s = max(0.0, latency_ms / 1000.0)
-                    min_margin = max(1.0 / PACKETS_PER_SECOND, 0.001)
-                    max_margin = 0.15
-                    factor = 0.3
-                    safety_margin_s = max(min_margin, min(max_margin, factor * latency_s))
-                    transit_est = (latency_s + safety_margin_s) * PACKETS_PER_SECOND
-                    self.max_transit_packets = int(min(max_window, max(min_window, round(transit_est))))
-                    '''
-
+                    #self.max_transit_packets = (int(self.latency_combined*PACKETS_PER_SECOND)-1)#%PACKET_LOSS_PRECISSION
+                    #if self.seq_number%(PACKETS_PER_SECOND)==0:
+                    #self.max_transit_packets = int(self.latency_combined*(PACKETS_PER_SECOND//10))#%PACKET_LOSS_PRECISSION
+                    self.max_transit_packets = (PACKETS_PER_SECOND//5)
+                    #self.in_transit = self.max_transit_packets
                     #k es la posicion en la que miras teniendo en cuenta los paquetes en transito
                     #0 es llega bien o primer envío
                     #1 es que se da por perdido sin contabilizar
                     #2 perdido pero ya contabilizado
                     #k = ((self.seq_number - self.max_transit_packets)+PACKET_LOSS_PRECISSION)%PACKET_LOSS_PRECISSION   
-                    k = ((self.seq_number - self.max_transit_packets))%PACKET_LOSS_PRECISSION   
+                    k = ((self.seq_number - self.max_transit_packets))%PACKET_LOSS_PRECISSION
+                    self.index_look = k
+                    #print(f"\nseq_n-k={self.seq_number}-{k}={self.seq_number-k}")  
                     #k = (abs(self.seq_number - self.max_transit_packets))%PACKET_LOSS_PRECISSION   
                     if self.packets_received[k] == 1:
                         #se perdio el paquete k y lo vamos a compensar
                         self.total_received -= 1 #Contabilizamos la perdida
                         self.packets_received[k] = 2
+                        self.lost = (self.lost+1)%PACKET_LOSS_PRECISSION
                     #print(f"TOTAL RECEIVED: {self.total_received}  K Vale: {k}  i vale:{self.seq_number}")
                     if self.packets_received[self.seq_number] == 0:
                         self.packets_received[self.seq_number] = 1 #damos por perdido de momento
+                        self.sent = (self.sent+1)%PACKET_LOSS_PRECISSION
                 self.seq_number = (self.seq_number+1)%PACKET_LOSS_PRECISSION
+
                 #print(f"Se dan por perdidos {PACKET_LOSS_PRECISSION - self.total_received} paquetes")
 
 
                 #time.sleep(TIME_BETWEEN_PINGS)#Esto es la cadencia de paquetes por segundo, configurable tambien
                 #sleep aleatorio entre time_between_pings y 2*time_between_pings
-                ##sleep_time = random.uniform(0, 2*TIME_BETWEEN_PINGS)
+                #sleep_time = random.uniform(TIME_BETWEEN_PINGS, 2*TIME_BETWEEN_PINGS)
                 sleep_time = TIME_BETWEEN_PINGS#random.uniform(0, 2*TIME_BETWEEN_PINGS)
                 time.sleep(sleep_time)
             except KeyboardInterrupt:
@@ -584,6 +589,7 @@ class q4s_lite_node():
 
 
     def measurement_receive_message(self):
+        first_time_printing = True
         while self.measuring:
             #recibe mensaje bloqueante
             try:
@@ -609,16 +615,7 @@ class q4s_lite_node():
                     logger.debug(f"[MEASURING RECEIVE PING] n_seq:{unpacked_data[1]}: lat_up:{unpacked_data[3]} lat_down:{unpacked_data[4]} jit_up:{unpacked_data[5]} jit_down:{unpacked_data[6]} pl_up:{unpacked_data[7]} pl_down:{unpacked_data[8]} vehicle_id:{unpacked_data[9]}")
                     packet_data = (resp_message,*unpacked_data[1:])#,unpacked_data[1],unpacked_data[2],unpacked_data[3],unpacked_data[4],unpacked_data[5],unpacked_data[6],unpacked_data[7],unpacked_data[8])
                     packet = struct.pack(PACKET_FORMAT, *packet_data)
-                    #self.socket.sendto(packet,self.target_address)
-                    #perdida de paquetes simulada
-                    n_seq_actual = unpacked_data[1]
-                    if self.packet_loss_decoration==0:
-                        self.socket.sendto(packet, self.target_address)
-                    elif self.packet_loss_decoration>0:
-                        #if not (self.seq_number % int(100*self.packet_loss_decoration) > 0):
-                        #if n_seq_actual % int(1/self.packet_loss_decoration) != 0:
-                        if random.random()>self.packet_loss_decoration:
-                            self.socket.sendto(packet, self.target_address)
+                    self.socket.sendto(packet,self.target_address)
                     logger.debug(f"[MEASURING CONTEST RESP] n_seq:{packet_data[1]}: lat_up:{packet_data[3]} lat_down:{packet_data[4]} jit_up:{packet_data[5]} jit_down:{packet_data[6]} pl_up:{packet_data[7]} pl_down:{packet_data[8]} vehicle_id:{unpacked_data[9]}")
                 elif message_type == "RESP": #RESP
                     #actualizo el packet received    
@@ -626,16 +623,25 @@ class q4s_lite_node():
                     with self.lock:
                         #unpacked_data[1] es el numero de secuencia
                         n_seq_actual = unpacked_data[1]
+                        #Mirar perdidas en rececpcion
+                        ##self.max_transit_packets = (n_seq_actual-self.index_look)%PACKET_LOSS_PRECISSION
+                        #############################
                         if self.packets_received[n_seq_actual] == 2:
                             self.total_received += 1 #Dejamos de contabilizar la perdida y sumamos al contador
+                            self.lost = (self.lost-1)%PACKET_LOSS_PRECISSION
+                        #else:
+                        #    self.sent-=1
                         self.packets_received[n_seq_actual] = 0
+                        '''if n_seq_actual != self.last_seq + 1:
+                            self.lost2 = (self.lost2+1)
+                            self.last_seq = n_seq_actual'''
                     logger.debug(f"[MEASURING RECEIVE RESP] n_seq:{unpacked_data[1]}: lat_up:{unpacked_data[3]} lat_down:{unpacked_data[4]} jit_up:{unpacked_data[5]} jit_down:{unpacked_data[6]} pl_up:{unpacked_data[7]} pl_down:{unpacked_data[8]} vehicle_id:{unpacked_data[9]}")
                     
                     if self.role=="server":
-                        self.latency_down,self.jitter_down,self.packet_loss_down = self.get_metrics(timestamp_recepcion,unpacked_data[2],self.latency_down,self.total_received)
+                        self.latency_down,self.jitter_down,self.packet_loss_down = self.get_metrics(timestamp_recepcion,unpacked_data[2],self.latency_down,self.total_received,self.max_transit_packets, self.lost,self.sent,self.in_transit, self.lost2)
                         logger.debug(f"[MEASURING (down)] Latency:{self.latency_down:.10f} Jitter: {self.jitter_down:.10f} Packet_loss: {self.packet_loss_down:.3f}")
                     elif self.role=="client":
-                        self.latency_up,self.jitter_up,self.packet_loss_up = self.get_metrics(timestamp_recepcion,unpacked_data[2],self.latency_up,self.total_received)
+                        self.latency_up,self.jitter_up,self.packet_loss_up = self.get_metrics(timestamp_recepcion,unpacked_data[2],self.latency_up,self.total_received,self.max_transit_packets, self.lost,self.sent,self.in_transit, self.lost2)
                         logger.debug(f"[MEASURING (up)] Latency:{self.latency_up:.10f} Jitter: {self.jitter_up:.10f} Packet_loss: {self.packet_loss_up:.3f}")    
                     
                     #Combinacion de medidas
@@ -646,7 +652,19 @@ class q4s_lite_node():
                     #Posible TODO: Printar y comprobar alertas cada n paquetes, los necesarios para dar una alarma cada SMOOTHING_PARAM Paquetes
                     #mejor llamar mucho y comprobarlo dentro, en caso de fallo llegan pocos recoveries y puedes perder tiempo
                     decoded_identifier = decode_identifier(unpacked_data[9])
-                    print(f"[MEASURING:{decoded_identifier}] Lat:{self.latency_combined:.6f} Loss: {self.packet_loss_combined:.3f} Jitter: {self.jitter_combined:.3f} Conn: {self.connection_errors}", end="\r")
+                    #print(f"[MEASURING:{decoded_identifier}] Lat:{self.latency_combined:.6f} Loss: {self.packet_loss_combined:.3f} Jitter: {self.jitter_combined:.3f} Conn: {self.connection_errors}", end="\r")
+                    
+                    print(f"[MEASURING:{decoded_identifier}] Lat:{self.latency_combined:11.6f} Loss:{self.packet_loss_combined:5.3f} nseq-k:{n_seq_actual:4d}-{self.index_look:4d}={(n_seq_actual-self.index_look)%PACKET_LOSS_PRECISSION:4d} Conn:{self.connection_errors}", end="\r")
+                    self.in_transit = (n_seq_actual-self.index_look)%PACKET_LOSS_PRECISSION
+                    '''if first_time_printing:
+                        print(f"[MEASURING:{decoded_identifier}] Lat:{self.latency_combined:11.6f} Loss:{self.packet_loss_combined:5.3f} nseq-k:{n_seq_actual:4d}-{self.index_look:4d}={(n_seq_actual-self.index_look)%PACKET_LOSS_PRECISSION:4d} Conn:{self.connection_errors}", end="\r")
+                        first_time_printing = False
+                        last_print_time = time.perf_counter()
+                    else:
+                        if time.perf_counter() - last_print_time > 1:
+                            print(f"[MEASURING:{decoded_identifier}] Lat:{self.latency_combined:11.6f} Loss:{self.packet_loss_combined:5.3f} nseq-k:{n_seq_actual:4d}-{self.index_look:4d}={(n_seq_actual-self.index_look)%PACKET_LOSS_PRECISSION:4d} Conn:{self.connection_errors}", end="\r")
+                            last_print_time = time.perf_counter()'''
+                    
                     #Test de loss en print
                     #print(f"[MEASURING:{decoded_identifier}] Lat:{self.latency_combined:.6f} Loss: {self.packet_loss_combined:.3f} Loss2:{PACKET_LOSS_PRECISSION - self.total_received} Conn: {self.connection_errors}", end="\r")
                     self.check_alert(self.latency_combined>=LATENCY_ALERT,self.packet_loss_combined>=PACKET_LOSS_ALERT, decoded_identifier)
@@ -657,6 +675,7 @@ class q4s_lite_node():
                 self.measuring=False
             except (ConnectionResetError,socket.timeout):
                 #No esta levantado el otro extremo
+                #TODO: Definir el decoded identifier que puede dar error
                 if time.perf_counter()-self.state[2]>=KEEP_ALERT_TIME_PUBLICATOR:
                     self.state[0] = "alert"
                     self.state[2] = time.perf_counter()
@@ -695,7 +714,7 @@ class q4s_lite_node():
         else:
             init = 0
         if init == 0:                
-            socket_timeout = 0.300 # Acordado en Valencia, ctag frena el coche con 250 milis sin mensajes
+            socket_timeout = 1.300 # Acordado en Valencia, ctag frena el coche con 250 milis sin mensajes
             self.socket.settimeout(socket_timeout)#un segundo antes de perdida de conex, mejor valor 360ms, podria ser una vble global, o a fuego por precaucion
             
             self.hilo_rcv = threading.Thread(target=self.measurement_receive_message, daemon=True, name="hilo_rcv")
@@ -734,7 +753,7 @@ def load_config(config_file):
     global VEHICLE_ID,PACKETS_PER_SECOND,PACKET_LOSS_PRECISSION,LATENCY_ALERT,PACKET_LOSS_ALERT, \
     server_address, server_port, client_address, client_port, NO_INIT, \
     KEEP_ALERT_TIME, KEEP_ALERT_TIME_PUBLICATO, TIME_BETWEEN_PINGS,MEASURES_COMBINATION_STRATEGY,COMBINED_FUNC, \
-    PACKET_FORMAT, PACKET_SIZE, OFFSET, REAL_SCENARIO
+    PACKET_FORMAT, PACKET_SIZE, OFFSET
 
     config = configparser.ConfigParser()
 
@@ -758,13 +777,26 @@ def load_config(config_file):
     NO_INIT = general.getboolean('NO_INIT')
     MEASURES_COMBINATION_STRATEGY = general.getint('MEASURES_COMBINATION_STRATEGY')
     OFFSET = general.getint('OFFSET')
-    REAL_SCENARIO = general.getboolean('REAL_SCENARIO')
 
-    
+    print('Q4s_lite Config params')
+    print("======================")
+    print(f"VEHICLE_ID = {VEHICLE_ID}")
+    print(f"PACKETS_PER_SECOND = {PACKETS_PER_SECOND}")
+    print(f"PACKET_LOSS_PRECISSION = {PACKET_LOSS_PRECISSION}")
+    print(f"LATENCY_ALERT = {LATENCY_ALERT}")
+    print(f"PACKET_LOSS_ALERT = {PACKET_LOSS_ALERT}")
+    print(f"server_address,server_port = {server_address},{server_port}")
+    print(f"client_address,client_port = {client_address},{client_port}")
+    print(f"MEASURES_COMBINATION_STRATEGY = {MEASURES_COMBINATION_STRATEGY}")
+    print(f"OFFSET = {OFFSET}" )
+
+
+    print("\nQ4s_lite Execution")
+    print("======================")
 
     KEEP_ALERT_TIME = max(1,(PACKET_LOSS_PRECISSION / PACKETS_PER_SECOND)) #segundos que estas en estado de alerta a partir del cual vuelve a avisar al actuador, para no avisarle en todos los paquetes
     KEEP_ALERT_TIME_PUBLICATOR = 1
-    
+    print(f"KEEP_ALERT_TIME={KEEP_ALERT_TIME}")
 
     TIME_BETWEEN_PINGS = 1/PACKETS_PER_SECOND 
 

@@ -3,7 +3,7 @@ import time
 import q4s_lite
 import logging,sys, os
 from datetime import datetime
-import socket
+import socket, struct
 import configparser
 
 #Parametros q4s
@@ -65,6 +65,8 @@ server_address= network.get('server_address')
 server_port= network.getint('server_port')
 client_address= network.get('client_address')
 client_port= network.getint('client_port')
+VEHICLE_ID= general.get('VEHICLE_ID')
+PROXY_USE = actuator.getboolean('PROXY_USE')
 
 
 print('\nActuator Config params')
@@ -75,6 +77,8 @@ print(f"client_address,client_port = {client_address},{client_port}")
 print(f"insignificant_losses = {insignificant_loses}")
 print(f"fuentes = {FUENTES}")
 print(f"tam por fuente = {TAM_POR_FUENTE}")
+print(f"Proxy = {PROXY_USE}")
+print(f"Vehicle id = {VEHICLE_ID}")
 print()
 
 #logging
@@ -410,13 +414,42 @@ def actuator(q4s_node):
                 state = 2
                 continue
 
-            
 
+def get_server_port_from_proxy(VEHICLE_ID):
+    PACKET_FORMAT = ">4s4s"      # 4 bytes tipo + 16 bytes car_id
+    MSG_ENCODING = "utf-8"
+    p_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    p_socket.connect((server_address, server_port))
+    while True:
+        # Empaquetar mensaje HOLA + car_id
+        tipo_bytes = "HOLA".ljust(4).encode(MSG_ENCODING)
+        car_bytes = VEHICLE_ID.ljust(4).encode(MSG_ENCODING)
+        packet = struct.pack(PACKET_FORMAT, tipo_bytes, car_bytes)
+
+        # Enviar al servidor
+        p_socket.send(packet) 
+        print(f"Enviado HOLA a {server_address}:{server_port}")
+
+        try:
+            data = p_socket.recv(5)  # Recibir respuesta
+            # Suponiendo que el servidor envía el puerto como cadena de 5 bytes
+            puerto_recibido = int(data.decode(MSG_ENCODING).strip())
+            print(f"Recibido puerto: {puerto_recibido}")
+            break  # Terminar cuando se recibe puerto
+        except socket.timeout:
+            print("No hay respuesta del proxy, reintentando en 1 segundo...")
+            time.sleep(1)
+
+    p_socket.close()
+    print("Puerto adquirido.")
+    return puerto_recibido 
 
 def main():
-    global actuator_alive
+    global actuator_alive,server_port
     logger.addHandler(client_handler)
     #El actuador es el cliente por defecto, ya que va en el coche
+    if PROXY_USE:
+        server_port = get_server_port_from_proxy(VEHICLE_ID)
     q4s_node = q4s_lite.q4s_lite_node("client",client_address, client_port, server_address, server_port,event_actuator=event, config_file=config_file)
     q4s_node.run()
     actuator_alive = True

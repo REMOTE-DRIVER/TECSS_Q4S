@@ -3,7 +3,7 @@ import time
 import q4s_lite
 import logging,sys, os
 from datetime import datetime
-import socket
+import socket, struct
 import configparser
 
 
@@ -62,6 +62,7 @@ actuator_port= actuator.getint('actuator_port')
 insignificant_loses = actuator.getfloat('insignificant_loses')
 FUENTES = actuator.getint('FUENTES')
 TAM_POR_FUENTE = actuator.getint('TAM_POR_FUENTE')
+PROXY_USE = actuator.getboolean('PROXY_USE')
 
 #server_address, server_port = q4s_lite.server_address, q4s_lite.server_port#"127.0.0.1",20001
 #client_address, client_port = q4s_lite.client_address, q4s_lite.client_port#"127.0.0.1",20002
@@ -69,15 +70,18 @@ server_address= network.get('server_address')
 server_port= network.getint('server_port')
 client_address= network.get('client_address')
 client_port= network.getint('client_port')
+VEHICLE_ID= general.get('VEHICLE_ID')
 
 print('\nActuator Config params')
 print("======================")
 print(f"actuator_address,actuator_port = {actuator_host},{actuator_port}")
 print(f"server_address,server_port = {server_address},{server_port}")
-print(f"client_address,client_port = {client_address},{client_port}")
+print(f"client_address,client_port = {client_address}")
 print(f"insignificant_losses = {insignificant_loses}")
 print(f"fuentes = {FUENTES}")
 print(f"tam por fuente = {TAM_POR_FUENTE}")
+print(f"Proxy = {PROXY_USE}")
+print(f"Vehicle id = {VEHICLE_ID}")
 print()
 
 
@@ -128,9 +132,6 @@ def set_noise_resist(enable: bool) -> str:
     sample response: "OK\0"'''
     return send_command(f"SET_NOISE_RESIST:{int(enable)}")
 
-
-
-
 def actuator(q4s_node):
     global actuator_alive    
     while actuator_alive:
@@ -140,12 +141,52 @@ def actuator(q4s_node):
         print(f"\n[ACTUATOR]{datetime.now().strftime("%H:%M:%S.%f")[:-3]} Me ha llegado una alerta por packet loss\n\tcliente: {q4s_node.packet_loss_up}\n\tserver: {q4s_node.packet_loss_down}\n\tcombinado: {q4s_node.packet_loss_combined}")
     print("\nFinished actuation you must relaunch the program\nPress 0 to exit\n")
 
+def get_server_port_from_proxy(VEHICLE_ID):
+    PACKET_FORMAT = ">4s4s"      # 4 bytes tipo + 16 bytes car_id
+    MSG_ENCODING = "utf-8"
+    while True:
+        try:
+            print(f"Conectando con el server en {server_address}:{server_port}...")
+            p_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            p_socket.connect((server_address, server_port))
+            break
+        except(ConnectionRefusedError, OSError):
+            print("El proxy no está disponible, reintentando en 1 segundo...")
+            time.sleep(1)
+
+    while True:
+        # Empaquetar mensaje HOLA + car_id
+        tipo_bytes = "HOLA".ljust(4).encode(MSG_ENCODING)
+        car_bytes = VEHICLE_ID.ljust(4).encode(MSG_ENCODING)
+        packet = struct.pack(PACKET_FORMAT, tipo_bytes, car_bytes)
+
+        # Enviar al servidor
+        p_socket.send(packet) 
+        print(f"Enviado HOLA a {server_address}:{server_port}")
+
+        try:
+            data = p_socket.recv(5)  # Recibir respuesta
+            # Suponiendo que el servidor envía el puerto como cadena de 5 bytes
+            puerto_recibido = int(data.decode(MSG_ENCODING).strip())
+            print(f"Recibido puerto: {puerto_recibido}")
+            break  # Terminar cuando se recibe puerto
+        except socket.timeout:
+            print("No hay respuesta del proxy, reintentando en 1 segundo...")
+            time.sleep(1)
+
+    p_socket.close()
+    print("Puerto adquirido.")
+    return puerto_recibido
+
 def main():
-    global actuator_alive
+    global actuator_alive, server_port
     logger.addHandler(client_handler)
     #El actuador es el cliente por defecto, ya que va en el coche
     #Aqui se deberian leer las variables globales del fichero
     #config_file="q4s_lite_config.ini"
+    if PROXY_USE:
+        server_port = get_server_port_from_proxy(VEHICLE_ID)
+    #server_port = get_server_port_from_proxy(VEHICLE_ID)
     q4s_node = q4s_lite.q4s_lite_node("client",client_address, client_port, server_address, server_port,event_actuator=event, config_file=config_file)
     q4s_node.run()
     actuator_alive = True

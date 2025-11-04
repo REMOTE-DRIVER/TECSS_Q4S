@@ -253,7 +253,7 @@ def graceful_exit(_: int | None = None, __: object | None = None):
 signal.signal(signal.SIGINT, graceful_exit)
 signal.signal(signal.SIGTERM, graceful_exit)
 
-if __name__ == "__main__":
+def main(server_port = server_port):
     if len(sys.argv)==2:
         config_file = sys.argv[1]
     else:
@@ -311,3 +311,6 @@ if __name__ == "__main__":
                 graceful_exit()
     except (KeyboardInterrupt, EOFError):
         graceful_exit()
+
+if __name__ == "__main__":
+    main()
