@@ -39,7 +39,7 @@ DEFAULTS = {
     }
 }
 
-
+#Si indicas otro config file, lo carga
 if len(sys.argv)==2:
     config_file = sys.argv[1]
 else:
@@ -142,41 +142,90 @@ def actuator(q4s_node):
     print("\nFinished actuation you must relaunch the program\nPress 0 to exit\n")
 
 def get_server_port_from_proxy(VEHICLE_ID):
-    PACKET_FORMAT = ">4s4s"      # 4 bytes tipo + 16 bytes car_id
+    PACKET_FORMAT = ">4s4s"
     MSG_ENCODING = "utf-8"
+    
+
     while True:
+        # --- 1. Conectar ---
+        
+        try:
+            print(f"Conectando con el server en {server_address}:{server_port}...")
+            p_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            p_socket.connect((server_address, server_port))
+        except:
+            print("El proxy no está disponible, reintentando...")
+            
+            time.sleep(1)
+            continue
+
+        # --- 2. Enviar HOLA ---
+        tipo_bytes = "HOLA".encode(MSG_ENCODING)
+        car_bytes = VEHICLE_ID.ljust(4).encode(MSG_ENCODING)
+        packet = struct.pack(PACKET_FORMAT, tipo_bytes, car_bytes)
+        p_socket.sendall(packet)
+        print("Enviado HOLA")
+
+        # --- 3. Recibir respuesta ---
+        try:
+            data = p_socket.recv(5)
+        except:
+            print("Error recibiendo respuesta.")
+            p_socket.close()
+            continue
+
+        p_socket.close()
+
+        if not data:
+            print("Respuesta vacía. Reintentando...")
+            time.sleep(1)
+            continue
+
+        try:
+            puerto = int(data.decode(MSG_ENCODING).strip())
+        except:
+            print("Respuesta inválida, reintentando...")
+            time.sleep(1)
+            continue
+
+        if puerto == -1:
+            print("No hay puertos disponibles, reintentando en 10 segundos...")
+            time.sleep(10)
+            continue
+
+        print(f"Puerto obtenido: {puerto}")
+        return puerto
+
+def good_bye_proxy():
+    PACKET_FORMAT = ">4s4s"
+    MSG_ENCODING = "utf-8"
+    server_port = 20004 #Coger de la configuracion el default_listening_port
+    retries = 0
+
+    while True:
+        # --- 1. Conectar ---
+        if retries==10:
+            print("Proxy no disponible, saliendo")
+            sys.exit()
         try:
             print(f"Conectando con el server en {server_address}:{server_port}...")
             p_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             p_socket.connect((server_address, server_port))
             break
-        except(ConnectionRefusedError, OSError):
-            print("El proxy no está disponible, reintentando en 1 segundo...")
+        except:#Hay que limitar esto, porque si te quieres ir te sales aunque el proxy esta caido
+            print("El proxy no está disponible, reintentando...")
+            retries += 1
             time.sleep(1)
+            continue
 
-    while True:
-        # Empaquetar mensaje HOLA + car_id
-        tipo_bytes = "HOLA".ljust(4).encode(MSG_ENCODING)
-        car_bytes = VEHICLE_ID.ljust(4).encode(MSG_ENCODING)
-        packet = struct.pack(PACKET_FORMAT, tipo_bytes, car_bytes)
-
-        # Enviar al servidor
-        p_socket.send(packet) 
-        print(f"Enviado HOLA a {server_address}:{server_port}")
-
-        try:
-            data = p_socket.recv(5)  # Recibir respuesta
-            # Suponiendo que el servidor envía el puerto como cadena de 5 bytes
-            puerto_recibido = int(data.decode(MSG_ENCODING).strip())
-            print(f"Recibido puerto: {puerto_recibido}")
-            break  # Terminar cuando se recibe puerto
-        except socket.timeout:
-            print("No hay respuesta del proxy, reintentando en 1 segundo...")
-            time.sleep(1)
+    # --- 2. Enviar HOLA ---
+    tipo_bytes = "BYE".encode(MSG_ENCODING)
+    car_bytes = VEHICLE_ID.ljust(4).encode(MSG_ENCODING)
+    packet = struct.pack(PACKET_FORMAT, tipo_bytes, car_bytes)
+    p_socket.sendall(packet)
+    print("Enviado BYE")
 
     p_socket.close()
-    print("Puerto adquirido.")
-    return puerto_recibido
 
 def main():
     global actuator_alive, server_port
@@ -197,6 +246,7 @@ def main():
         print("\n1: Menu Pérdidas")
         print("2: Menu Peticiones")
         print("0: Salir")
+        print("9: Salir sin notificar al proxy")
         print("\nElige una opción: \n")
         option = input() 
 
@@ -206,14 +256,16 @@ def main():
             q4s_node.measuring = False
             q4s_node.hilo_snd.join()
             q4s_node.hilo_rcv.join()
+            #TODO: salida proxy ordenada, decir adios
+            if PROXY_USE:
+                #Mandar adios
+                good_bye_proxy()
             break
 
         elif option == '1':  # Submenú de pérdidas
             while True:
-                print("\n1: Empeora latencia")
-                print("2: Mejora latencia")
-                print("3: Pierde un 10 por ciento de paquetes")
-                print("4: No pierdas paquetes")
+                print("\n1: Pierde un 10 por ciento de paquetes")
+                print("2: No pierdas paquetes")
                 print("0: Atrás")
                 print("\nElige una opción: \n")
                 sub_option = input()
@@ -221,12 +273,8 @@ def main():
                 if sub_option == '0':
                     break
                 elif sub_option == '1':
-                    q4s_node.latency_decoration += 0.1
-                elif sub_option == '2':
-                    q4s_node.latency_decoration = 0
-                elif sub_option == '3':
                     q4s_node.packet_loss_decoration += 0.1
-                elif sub_option == '4':
+                elif sub_option == '2':
                     q4s_node.packet_loss_decoration = 0
 
         elif option == '2':  # Submenú de peticiones al coder
@@ -247,6 +295,13 @@ def main():
                     print(send_command(f"SET_NOISE_RESIST:{enable}"))
                 elif sub_option == "0":
                     break
+        elif option == '9':  # Mata el actuador y los hilos del cliente q4s
+            actuator_alive = False
+            q4s_node.running = False
+            q4s_node.measuring = False
+            q4s_node.hilo_snd.join()
+            q4s_node.hilo_rcv.join()
+            break
 
     print("EXIT")
 

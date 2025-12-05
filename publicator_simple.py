@@ -129,8 +129,22 @@ def measures_publicator(q4s_node):
         print(f"\n[PUBLICATOR] Vehicle id = {decode_identifier(q4s_node.flow_id)} Measures Latency:{q4s_node.latency_combined:.10f} Packet_loss: {q4s_node.packet_loss_combined:.3f}")
         time.sleep(PUBLICATION_TIME)
 
+def kill_publicator(event,q4s_node):
+    global publicator_alive
+    while True:
+        event.wait()
+        event.set()
+        print("Closing publicator")
+        publicator_alive=False
+        #publicator_thread.join()
+        q4s_node.running=False
+        q4s_node.measuring=False
+        q4s_node.hilo_snd.join()
+        q4s_node.hilo_rcv.join()        
+        break
+    print("PUBLICATOR BYE")
 
-def main(server_port = server_port):
+def main(server_port = server_port,kill_event = None):
     global publicator_alive
     logger.addHandler(client_handler)
     #El actuador es el server por defecto, ya que va en el proxy de video
@@ -142,9 +156,13 @@ def main(server_port = server_port):
     measures_publicator_thread = threading.Thread(target=measures_publicator,args=(q4s_node,),daemon=True)
     measures_publicator_thread.start()
 
-    #main_thread_alive = True
-    
-    while True:
+    if kill_event is not None: #Estas en modo proxy y lanzas el hilo kill publicator
+        kill_publicator_thread = threading.Thread(target=kill_publicator,args=(kill_event,q4s_node),daemon=True)
+        kill_publicator_thread.start()
+        kill_publicator_thread.join()#Todo probar sin join
+
+
+    while publicator_alive:
             #time.sleep(0.1)
             print("")
             print("1: pierde un 10 por ciento de paquetes")
@@ -162,7 +180,7 @@ def main(server_port = server_port):
                 q4s_node.hilo_rcv.join()
                 break
             elif option == '1':
-                q4s_node.packet_loss_decoration=0.1
+                q4s_node.packet_loss_decoration+=0.1
                 #print(f"Packet_loss_decoration =  {q4s_node.packet_loss_decoration}")
             elif option == '2':
                 q4s_node.packet_loss_decoration=0
@@ -175,6 +193,7 @@ def main(server_port = server_port):
                 q4s_node.hilo_rcv.join()
                 publicator_thread.join()
                 main()'''
+
                 
 
     print("Saliendo...")

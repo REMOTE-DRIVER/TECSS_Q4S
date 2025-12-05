@@ -1,11 +1,4 @@
-''' 
-NOKIA TECSS
-Implementacion de q4s bla bla
 
-Autores:
-Juan Ramos Diaz
-Juan Jose Guerrero Lopez
-'''
 import socket
 import struct
 import threading
@@ -15,6 +8,7 @@ import logging
 import functools
 import random
 import configparser
+import math
 
 # Valores por defecto
 DEFAULTS = {
@@ -26,7 +20,9 @@ DEFAULTS = {
         'PACKET_LOSS_ALERT': 0.02,
         'NO_INIT': False,
         'OFFSET':0,
-        'MEASURES_COMBINATION_STRATEGY':0
+        'MEASURES_COMBINATION_STRATEGY':0,
+        'REAL_SCENARIO': False,
+        'TAIL_ALPHA': 0.25
     },
     'NETWORK': {
         'server_address': '127.0.0.1',
@@ -35,16 +31,6 @@ DEFAULTS = {
         'client_port': 20002,
     }
 }
-
-
-
-'''if len(sys.argv)==3:
-    config_file = sys.argv[2]
-else:
-    config_file = "q4s_lite_config.ini"
-
-if not (os.path.exists(config_file)):
-    print("\n[Q4S Lite CONFIG] Config file not found using default configuration values\n")'''
 
 config = configparser.ConfigParser()
 
@@ -68,27 +54,8 @@ client_port= network.getint('client_port')
 NO_INIT = general.getboolean('NO_INIT')
 OFFSET = general.getint('OFFSET')
 MEASURES_COMBINATION_STRATEGY = general.getint('MEASURES_COMBINATION_STRATEGY')
-
-'''print('Q4s_lite Config params')
-print("======================")
-print(f"VEHICLE_ID = {VEHICLE_ID}")
-print(f"PACKETS_PER_SECOND = {PACKETS_PER_SECOND}")
-print(f"PACKET_LOSS_PRECISSION = {PACKET_LOSS_PRECISSION}")
-print(f"LATENCY_ALERT = {LATENCY_ALERT}")
-print(f"PACKET_LOSS_ALERT = {PACKET_LOSS_ALERT}")
-print(f"server_address,server_port = {server_address},{server_port}")
-print(f"client_address,client_port = {client_address},{client_port}")
-
-print("\nQ4s_lite Execution")
-print("======================")'''
-
-
-
-
-#Paquete con tipo_mensaje,num secuencia, timestamp, latencia_up/down, jitter_up/down, packet_loss_up/down 
-#Tipos de mensaje: SYN, ACK, PING, RESP, DISC
-#PACKET_FORMAT = ">4sidffffffi"  # Formato de los datos
-#PACKET_SIZE = 52 #bytes
+REAL_SCENARIO = general.getboolean('REAL_SCENARIO')
+TAIL_ALPHA = general.getfloat('TAIL_ALPHA')
 
 PACKET_FORMAT = f">4sidffffffi{OFFSET}s"  # Formato de los datos
 PACKET_SIZE = 52 + OFFSET #bytes
@@ -103,16 +70,9 @@ reset_message = "RST".ljust(4).encode(MSG_FORMAT)
 
 INIT_CONNECTION_TRIES = 10
 MODO_STANDALONE = False  #Para indicar que se ejecuta como libreria, solo se pone a true si se ejecuta desde este modulo
-#VEHICLE_ID = "0000"
 
-#PACKETS_PER_SECOND = 30 
-
-#PACKET_LOSS_PRECISSION = 100 #Precision de los paquetes perdidos
-#LATENCY_ALERT = 20 #milisegundos
-#PACKET_LOSS_ALERT = 0.02 #tanto por 1
 KEEP_ALERT_TIME = max(1,(PACKET_LOSS_PRECISSION / PACKETS_PER_SECOND)) #segundos que estas en estado de alerta a partir del cual vuelve a avisar al actuador, para no avisarle en todos los paquetes
 KEEP_ALERT_TIME_PUBLICATOR = 1
-#print(f"KEEP_ALERT_TIME={KEEP_ALERT_TIME}")
 
 #Nueva latencia
 LATENCY_CHECKPOINT = [3,5,7,9]# definen crecimiento y diferencia de latencia, jj recomienda de 3,4,5,6
@@ -131,11 +91,6 @@ COMBINED_FUNC = MEASURE_COMBINATIONS[MEASURES_COMBINATION_STRATEGY]
 
 #Tiempo en segundos para medir los errores de conexion
 CONNECTION_ERROR_TIME_MARGIN = 1
-
-#server_address, server_port = "127.0.0.1",20001
-#client_address, client_port = "127.0.0.1",20002
-#server_address, server_port = "192.168.1.113", 20001
-#client_address, client_port = "192.168.1.50", 20002
 
 #Configuracion de logging: logger.info (en adelante) en consola y fichero, logger.debug solo en fichero
 logger = logging.getLogger('q4s_logger')
@@ -209,7 +164,20 @@ class q4s_lite_node():
         self.first_packet = False
         self.packets_received = [0] * PACKET_LOSS_PRECISSION
         self.total_received = PACKET_LOSS_PRECISSION
-        self.max_transit_packets = int(PACKETS_PER_SECOND)
+        self.max_transit_packets = PACKETS_PER_SECOND//5
+        self.old_max_transit_packets = 1
+        self.looking_packet = 0
+        self.last_seq_sent = 0
+        self.process_time = 0
+        self.array_lost_marked = [None] * PACKET_LOSS_PRECISSION
+        self.falsos_positivos = 0
+        self.lost_to_recover = [0] * PACKET_LOSS_PRECISSION
+        self.tail_alpha = TAIL_ALPHA
+        #Añadir: timestamps de cuando se "envió" cada seq (perf_counter)
+        self.send_timestamps = [0.0] * PACKET_LOSS_PRECISSION
+        #Auxiliares packet loss
+        self.lost_marked = 0
+        self.lost_recovered = 0
         #state
         self.state=[None,None,None] #Es una tupla de nombre estado, timestamp cuando se puso en actuador y timestamp cuando se puso en publicador, ver si la alerta es larga
         #lock para acceso critico
@@ -222,9 +190,34 @@ class q4s_lite_node():
         self.packet_loss_decoration = 0
         #Offset del paquete para pruebas
         self.offset = b"A" * OFFSET
-        #Pruebas packet_loss
-        self.sent = [0]
-        self.received = [0]
+        # Contador global monotónico para secuencia (no modular)
+        self.global_seq = 0
+        # para cada slot guardamos la secuencia global que ocupa actualmente
+        self.send_seq = [0] * PACKET_LOSS_PRECISSION
+        self.last_global_seq_sent = 0
+
+
+
+
+
+        #Se printan los parametros de la pila
+        print('Q4s_lite Config params')
+        print("======================")
+        print(f"VEHICLE_ID = {VEHICLE_ID}")
+        print(f"PACKETS_PER_SECOND = {PACKETS_PER_SECOND}")
+        print(f"PACKET_LOSS_PRECISSION = {PACKET_LOSS_PRECISSION}")
+        print(f"LATENCY_ALERT = {LATENCY_ALERT}")
+        print(f"PACKET_LOSS_ALERT = {PACKET_LOSS_ALERT}")
+        print(f"server_address,server_port = {server_address},{server_port}")
+        print(f"client_address = {client_address}")
+        print(f"MEASURES_COMBINATION_STRATEGY = {MEASURES_COMBINATION_STRATEGY}")
+        print(f"OFFSET = {OFFSET}" )
+        print(f"KEEP_ALERT_TIME={KEEP_ALERT_TIME}")
+        print(f"REAL_SCENARIO = {REAL_SCENARIO}")
+        print(f"TAIL_ALPHA = {TAIL_ALPHA}")
+
+        print("\nQ4s_lite Execution")
+        print("======================")
 
 
     def init_connection_server(self):
@@ -290,7 +283,7 @@ class q4s_lite_node():
                     packet_data=(ack_message,0,time.time(),0.0,0.0,0.0,0.0,0.0,0.0,self.flow_id,self.offset)
                     datos = struct.pack(PACKET_FORMAT,*packet_data)
                     self.socket.sendto(datos,self.target_address)
-                    logger.info(f"[INIT CONNECTION] CLIENT: Conexion establecida ha tardado {timestamp_recepcion-timestamp} segundos")
+                    logger.info(f"[INIT CONNECTION] CLIENT {self.socket.getsockname()}: Conexion establecida ha tardado {timestamp_recepcion-timestamp} segundos")
                     return 0
                 else:#RESET
                     logger.info("[RESET CONNECTION] CLIENT: Received PING or RESP while initializating connection")
@@ -305,83 +298,8 @@ class q4s_lite_node():
             logger.info("[INIT CONNECTION] CLIENT: Error, no se puede conectar al servidor")
             return -1
 
-    def init_connection_server_tcp(self):
-        '''try: #intenta recibir un udp primero en caso de desconexion
-            self.socket.settimeout(2)  # Espera breve por UDP
-            data, addr = self.socket.recvfrom(PACKET_SIZE)
-            data_rcvd = struct.unpack(PACKET_FORMAT, data)
-            message_type = data_rcvd[0].decode(MSG_FORMAT).strip()
-            if message_type in ("PING", "RESP", "ACK"):  # O cualquier mensaje válido post-handshake
-                logger.info("[RECONNECT] CLIENT: Detectado servidor activo por UDP, omitiendo TCP.")
-                self.target_address = addr
-                return 0
-        except socket.timeout:
-            logger.info("[RECONNECT] CLIENT: No se detectó actividad UDP, procediendo con TCP.")
-        except Exception as e:
-            logger.error(f"[RECONNECT] CLIENT: Error inesperado en recepción UDP: {e}")'''
-
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as tcp_sock:
-                tcp_sock.bind((self.address, self.port))
-                tcp_sock.listen(1)
-                print('[TCP] Esperando conexión...')
-                
-                conn, addr = tcp_sock.accept()
-                with conn:
-                    print(f'[TCP] Conectado por {addr}')
-                    try:
-                        data = conn.recv(1024)
-                        flow_id = int(data.decode())
-                        flow_id = decode_identifier(flow_id)
-                        print(f'[TCP] flow_id recibido: {flow_id}')
-                        conn.sendall(b'TCP recibido. Envia UDP.')
-                        time.sleep(1)
-                        self.flow_id = flow_id
-                        return flow_id  # opcional: self.flow_id = flow_id
-                    except Exception as e:
-                        print(f'[TCP][Error] Error al recibir/enviar datos: {e}')
-                        return None
-        except socket.error as e:
-            print(f'[TCP][Error] Error de socket del servidor: {e}')
-            return None
-        except Exception as e:
-            print(f'[TCP][Error] Error inesperado: {e}')
-            return None
-
-    def init_connection_client_tcp(self):
-        '''self.flow_id = encode_identifier(VEHICLE_ID)
-
-        # Intentar recibir un paquete UDP primero si esta tras un nat no lo recibe ¿Que hacer si se cae?
-        try:
-            self.socket.settimeout(2)  # Espera breve por UDP
-            data, addr = self.socket.recvfrom(PACKET_SIZE)
-            data_rcvd = struct.unpack(PACKET_FORMAT, data)
-            message_type = data_rcvd[0].decode(MSG_FORMAT).strip()
-            if message_type in ("PING", "RESP", "ACK"):  # O cualquier mensaje válido post-handshake
-                logger.info("[RECONNECT] CLIENT: Detectado servidor activo por UDP, omitiendo TCP.")
-                self.target_address = addr
-                return 0
-        except socket.timeout:
-            logger.info("[RECONNECT] CLIENT: No se detectó actividad UDP, procediendo con TCP.")
-        except Exception as e:
-            logger.error(f"[RECONNECT] CLIENT: Error inesperado en recepción UDP: {e}")'''
-
-        # Si no hay respuesta UDP, iniciar handshake TCP normalmente
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as tcp_sock:
-                tcp_sock.connect(self.target_address)
-                tcp_sock.sendall(str(self.flow_id).encode())
-                data = tcp_sock.recv(1024)
-                logger.info(f'[TCP] Servidor dice: {data.decode()}')
-                time.sleep(1)
-                return 0
-        except Exception as e:
-            logger.error(f'[TCP][Error] Cliente: {e}')
-            return 1
-
-
     @staticmethod
-    def get_metrics(reception_time,sent_time,last_latency,total_received,sent,received):
+    def get_metrics(reception_time,sent_time,last_latency,total_received):
         global UP_INDEX,DOWN_INDEX
         new_latency = ((reception_time-sent_time)*1000)/2 #rtt/2
         jitter = abs(new_latency-last_latency) #El valor absoluto TODO restar la original, no la smoothed
@@ -407,26 +325,25 @@ class q4s_lite_node():
             DOWN_INDEX = 0
 
         #loss
-        #loss=((PACKET_LOSS_PRECISSION-total_received)/PACKET_LOSS_PRECISSION)
-        #print(f"\nllegan {sent}, {received}\n")
-        loss = (sent-received)/sent
-        #TODO por configuracion se puede ver si se divide la loss por 2
-        #loss=loss/2
-        #print("\nPerdidas ",total_received, loss)
+        loss=((PACKET_LOSS_PRECISSION-total_received)/PACKET_LOSS_PRECISSION)
         if loss < 0:
             loss = 0
-        #print("\nPerdidas ",total_received, loss)
-        #print(smothed_latency,jitter,loss)
+        if loss>=1:
+            loss = 1
+        elif REAL_SCENARIO == False: 
+            '''Esta formula solo es valida cuando las perdidas son aleatorias, simetricas e independientes, como las perdidas
+            simuladas con clumsy'''
+            loss = 1.0 - (1.0 - loss)**0.5
         return smoothed_latency,jitter,loss
 
     def measurement_send_ping(self):
         while self.measuring:
             #Se prepara el paquete
+            send_time_now = time.perf_counter()
             packet_data=(
                 ping_message,
-                self.seq_number,
-                #time.time(),
-                time.perf_counter(),
+                self.global_seq,   # enviar secuencia global (no módulo),
+                send_time_now,
                 self.latency_up,
                 self.latency_down,
                 self.jitter_up,
@@ -437,47 +354,84 @@ class q4s_lite_node():
                 self.offset
                 )
             packet = struct.pack(PACKET_FORMAT, *packet_data)
+            
             try:
-                #perdida de paquetes simulada
-                if self.packet_loss_decoration==0:
-                    self.socket.sendto(packet, self.target_address)
-                elif self.packet_loss_decoration>0:
-                    #if not (self.seq_number % int(100*self.packet_loss_decoration) > 0):
-                    if self.seq_number % int(1/self.packet_loss_decoration) != 0:
-                    #if random.random()>self.packet_loss_decoration:
-                        self.socket.sendto(packet, self.target_address)
-                    #else:
-                        #print(f"\nPaquete no enviado {self.seq_number}")
-                #self.socket.sendto(packet, self.target_address)
-                logger.debug(f"[MEASURING SEND PING] n_seq:{packet_data[1]}: lat_up:{packet_data[3]} lat_down:{packet_data[4]} jit_up:{packet_data[5]} jit_down:{packet_data[6]} pl_up:{packet_data[7]} pl_down:{packet_data[8]}")
-                '''with self.lock:
+                with self.lock:#Antes de enviar miro la posicion k
+                    latency_s = self.latency_combined/1000
+                    jitter_s = self.jitter_combined/1000
+                    self.max_transit_packets = math.ceil((2*(latency_s + jitter_s)+self.process_time) * PACKETS_PER_SECOND)
+                    #security_offset = TAIL_ALPHA * PACKET_LOSS_PRECISSION
+                    security_offset = self.tail_alpha * PACKET_LOSS_PRECISSION
+                    self.max_transit_packets += int(security_offset)
+                    # Guardar timestamp/seq en el slot que usará este envío
+                    idx_now = self.global_seq % PACKET_LOSS_PRECISSION
+                    self.send_timestamps[idx_now] = send_time_now
+                    self.send_seq[idx_now] = self.global_seq
                     #k es la posicion en la que miras teniendo en cuenta los paquetes en transito
                     #0 es llega bien o primer envío
                     #1 es que se da por perdido sin contabilizar
                     #2 perdido pero ya contabilizado
-                    k = ((self.seq_number - self.max_transit_packets)+PACKET_LOSS_PRECISSION)%PACKET_LOSS_PRECISSION   
-                    #k = (abs(self.seq_number - self.max_transit_packets))%PACKET_LOSS_PRECISSION   
-                    if self.packets_received[k] == 1:
-                        #se perdio el paquete k y lo vamos a compensar
-                        self.total_received -= 1 #Contabilizamos la perdida
-                        self.packets_received[k] = 2
-                    print(f"TOTAL RECEIVED: {self.total_received}  K Vale:{k:3d} seq_number vale:{self.seq_number:3d}  loss:{self.packet_loss_combined:.2f}  ")#,end = "\r")
-                    if self.packets_received[self.seq_number] == 0:
-                        self.packets_received[self.seq_number] = 1 #damos por perdido de momento
-                self.seq_number = (self.seq_number+1)%PACKET_LOSS_PRECISSION'''
-                #print(f"Se dan por perdidos {PACKET_LOSS_PRECISSION - self.total_received} paquetes")
-                with self.lock:
-                    self.sent.append(self.seq_number)
-                self.seq_number = (self.seq_number+1)%PACKET_LOSS_PRECISSION
-                if self.seq_number == 0:
-                    self.sent = [0]
-                    self.received = [0]
+                    # Calculamos qué secuencia global corresponde al paquete que deberíamos mirar
+                    expected_counter = max(0, self.global_seq - self.max_transit_packets)
+                    k_index = expected_counter % PACKET_LOSS_PRECISSION
+                    self.looking_packet = k_index
 
+                    print(f"[DBG] global_seq={self.global_seq} expected={expected_counter} k_index={k_index} "
+                          f"slot_state={self.packets_received[k_index]} send_seq_slot={self.send_seq[k_index]} "
+                          f"send_ts={self.send_timestamps[k_index]:.6f}")
 
-                #time.sleep(TIME_BETWEEN_PINGS)#Esto es la cadencia de paquetes por segundo, configurable tambien
-                #sleep aleatorio entre time_between_pings y 2*time_between_pings
-                #sleep_time = random.uniform(TIME_BETWEEN_PINGS, 2*TIME_BETWEEN_PINGS)
-                sleep_time = random.uniform(0, 2*TIME_BETWEEN_PINGS)
+                    if self.packets_received[k_index] == 1:
+                        # Verificar que el slot contiene la misma secuencia global que esperamos
+                        if self.send_seq[k_index] == expected_counter:
+                            send_t_k = self.send_timestamps[k_index]
+                            now = time.perf_counter()
+                            # umbral temporal en segundos (la ventana actual en paquetes -> tiempo)
+                            time_threshold = max(0.0001, (self.max_transit_packets / PACKETS_PER_SECOND))
+                            if send_t_k and (now - send_t_k) >= time_threshold:
+                                # se considera perdido definitivamente
+                                self.total_received -= 1
+                                self.packets_received[k_index] = 2
+                                self.array_lost_marked[k_index] = now
+                            else:
+                                # podría seguir en tránsito; no marcar
+                                pass
+                        else:
+                            # slot reutilizado: no tomar decisión (no corresponde al expected_counter)
+                            pass
+                    if self.packets_received[idx_now] == 0:
+                        self.packets_received[idx_now] = 1
+
+                    self.last_seq_sent = self.seq_number
+                    
+                    #perdida de paquetes simulada
+                    if self.packet_loss_decoration==0:
+                        self.socket.sendto(packet, self.target_address)
+                        #self.array_lost_marked[k] = (time.perf_counter())
+                    elif self.packet_loss_decoration > 0:
+                        # Parámetros del algoritmo determinista
+                        M = 10000                          # granularidad (más grande = más precisión)
+                        A = 2654435761                     # constante de dispersión (Knuth)
+                        loss = self.packet_loss_decoration # ej. 0.3 para 30%
+
+                        # Umbral de pérdida (número de valores que serán drop)
+                        threshold = int(round(loss * M))   # ej. 0.3 → 3000
+
+                        # Genera un valor pseudo-aleatorio pero determinista basado en seq_number
+                        v = (self.seq_number * A) % M
+
+                        # Si v >= threshold → enviamos (perdemos "threshold" valores de cada M)
+                        if v >= threshold:
+                            self.socket.sendto(packet, self.target_address)
+
+                    # aumentar contador global (sin wrap)
+                    # registrar último enviado (global)
+                    self.last_global_seq_sent = self.global_seq
+                    self.global_seq += 1
+                    # mantener seq_number (módulo) por compatibilidad con otras partes si se usa
+                    self.seq_number = self.global_seq % PACKET_LOSS_PRECISSION
+
+                sleep_time = TIME_BETWEEN_PINGS#random.uniform(0, 2*TIME_BETWEEN_PINGS)
+                #sleep_time = random.uniform(0, 2*TIME_BETWEEN_PINGS)
                 time.sleep(sleep_time)
             except KeyboardInterrupt:
                 self.measuring=False
@@ -506,7 +460,7 @@ class q4s_lite_node():
     #def check_alert(self,latency,packet_loss,data): #Quito el data porque ya no envio mensaje, lanzo alerta al actuador
     def check_alert(self,alert_latency,alert_packet_loss, flow_id):
         #Se invoca con booleanos si hay alerta, para comprobar si la alerta es nueva o lleva un rato en alerta
-        logger.debug(f"ESTADO: {self.state}")
+        #logger.debug(f"ESTADO: {self.state}")
         if self.state[0]=="normal":
             if alert_latency or alert_packet_loss:
                 self.state[0]="alert"
@@ -546,12 +500,11 @@ class q4s_lite_node():
 
 
     def measurement_receive_message(self):
+        global last_print
         while self.measuring:
             #recibe mensaje bloqueante
             try:
                 data,addr = self.socket.recvfrom(PACKET_SIZE)
-                #timestamp_recepcion solo se usa para medir, es decir si el mensaje es tipo resp, aqui es mas preciso pero se puede mover para optimizar el proceso
-                #timestamp_recepcion = time.time()
                 timestamp_recepcion = time.perf_counter()
                 #Reseteo de connection error
                 if self.connection_errors>0:
@@ -565,48 +518,78 @@ class q4s_lite_node():
                 if self.role=="server":
                     self.flow_id = unpacked_data[9]
                 if message_type == "PING": #PING
-                    #if self.latency_decoration > 0:
-                    #    time.sleep(self.latency_decoration)
                     self.update_measures(unpacked_data)
-                    logger.debug(f"[MEASURING RECEIVE PING] n_seq:{unpacked_data[1]}: lat_up:{unpacked_data[3]} lat_down:{unpacked_data[4]} jit_up:{unpacked_data[5]} jit_down:{unpacked_data[6]} pl_up:{unpacked_data[7]} pl_down:{unpacked_data[8]} vehicle_id:{unpacked_data[9]}")
-                    packet_data = (resp_message,*unpacked_data[1:])#,unpacked_data[1],unpacked_data[2],unpacked_data[3],unpacked_data[4],unpacked_data[5],unpacked_data[6],unpacked_data[7],unpacked_data[8])
+                    #logger.debug(f"[MEASURING RECEIVE PING] n_seq:{unpacked_data[1]}: lat_up:{unpacked_data[3]} lat_down:{unpacked_data[4]} jit_up:{unpacked_data[5]} jit_down:{unpacked_data[6]} pl_up:{unpacked_data[7]} pl_down:{unpacked_data[8]} vehicle_id:{unpacked_data[9]}")
+                    packet_data = (resp_message,*unpacked_data[1:])
                     packet = struct.pack(PACKET_FORMAT, *packet_data)
                     self.socket.sendto(packet,self.target_address)
-                    logger.debug(f"[MEASURING CONTEST RESP] n_seq:{packet_data[1]}: lat_up:{packet_data[3]} lat_down:{packet_data[4]} jit_up:{packet_data[5]} jit_down:{packet_data[6]} pl_up:{packet_data[7]} pl_down:{packet_data[8]} vehicle_id:{unpacked_data[9]}")
-                elif message_type == "RESP": #RESP
-                    #actualizo el packet received    
-                    #Medidas con transit packets                
-                    '''with self.lock:
-                        #unpacked_data[1] es el numero de secuencia
-                        n_seq_actual = unpacked_data[1]
-                        if self.packets_received[n_seq_actual] == 2:
-                            self.total_received += 1 #Dejamos de contabilizar la perdida y sumamos al contador
-                        self.packets_received[n_seq_actual] = 0'''
+                elif message_type == "RESP": #RESP  
+                    n_seq_actual = unpacked_data[1]   # ahora esto es la secuencia global
+                    idx_recv = n_seq_actual % PACKET_LOSS_PRECISSION            
                     with self.lock:
-                        self.received.append(self.seq_number)
-                    logger.debug(f"[MEASURING RECEIVE RESP] n_seq:{unpacked_data[1]}: lat_up:{unpacked_data[3]} lat_down:{unpacked_data[4]} jit_up:{unpacked_data[5]} jit_down:{unpacked_data[6]} pl_up:{unpacked_data[7]} pl_down:{unpacked_data[8]} vehicle_id:{unpacked_data[9]}")
-                    
-                    if self.role=="server":
-                        self.latency_down,self.jitter_down,self.packet_loss_down = self.get_metrics(timestamp_recepcion,unpacked_data[2],self.latency_down,self.total_received,len(self.sent),len(self.received))
-                        logger.debug(f"[MEASURING (down)] Latency:{self.latency_down:.10f} Jitter: {self.jitter_down:.10f} Packet_loss: {self.packet_loss_down:.3f}")
-                    elif self.role=="client":
-                        self.latency_up,self.jitter_up,self.packet_loss_up = self.get_metrics(timestamp_recepcion,unpacked_data[2],self.latency_up,self.total_received,len(self.sent),len(self.received))
-                        logger.debug(f"[MEASURING (up)] Latency:{self.latency_up:.10f} Jitter: {self.jitter_up:.10f} Packet_loss: {self.packet_loss_up:.3f}")    
-                    
-                    #Combinacion de medidas
-                    self.latency_combined = COMBINED_FUNC(self.latency_up,self.latency_down,self.role)
-                    self.packet_loss_combined = COMBINED_FUNC(self.packet_loss_up,self.packet_loss_down,self.role)
-                    self.jitter_combined = COMBINED_FUNC(self.jitter_up,self.jitter_down,self.role)
-                    
-                    #Posible TODO: Printar y comprobar alertas cada n paquetes, los necesarios para dar una alarma cada SMOOTHING_PARAM Paquetes
-                    #mejor llamar mucho y comprobarlo dentro, en caso de fallo llegan pocos recoveries y puedes perder tiempo
-                    decoded_identifier = decode_identifier(unpacked_data[9])
-                    #print(f"[MEASURING:{decoded_identifier}] Lat:{self.latency_combined:.6f} Loss: {self.packet_loss_combined:.3f} Jitter: {self.jitter_combined:.3f} Conn: {self.connection_errors}", end="\r")
-                    #Test de loss en print
-                    print(f"[MEASURING:{decoded_identifier}] Lat:{self.latency_combined:.6f} Loss: {self.packet_loss_combined:.3f} sent/received:{len(self.sent)}/{len(self.received)} Conn: {self.connection_errors}", end="\r")
-                    self.check_alert(self.latency_combined>=LATENCY_ALERT,self.packet_loss_combined>=PACKET_LOSS_ALERT, decoded_identifier)
-                    #if self.latency_decoration > 0:
-                    #    time.sleep(self.latency_decoration)
+                        print(f"[DBG-RECV] n_seq_actual={n_seq_actual} idx_recv={idx_recv} slot_state={self.packets_received[idx_recv]} send_seq={self.send_seq[idx_recv]} total_received={self.total_received}")
+                        last_seq = self.last_seq_sent
+                        outstanding = last_seq - n_seq_actual
+                        #outstanding = (last_seq - idx_recv) % PACKET_LOSS_PRECISSION
+                        # Solo procesar la recuperación si el slot corresponde exactamente a la misma secuencia global
+                        if self.packets_received[idx_recv] == 2 and self.send_seq[idx_recv] == n_seq_actual:
+                            self.total_received += 1
+                            # opcional: lost_to_recover
+                            if self.array_lost_marked[idx_recv] is not None:
+                                self.lost_to_recover[idx_recv] = timestamp_recepcion - self.array_lost_marked[idx_recv]
+                            # limpiar marca (si quieres)
+                            #self.array_lost_marked[idx_recv] = None
+
+                            #Para detectar falsos positivos, se recuperan paquetes antes de que pasen 1000, los marcaste como 
+                            #perdidos muy pronto
+                            '''if self.array_lost_marked[idx_recv] is not None:
+                                self.lost_to_recover[idx_recv] = timestamp_recepcion - self.array_lost_marked[idx_recv]
+                                #print(f"\nRecuperado {idx_recv}:{self.lost_to_recover[idx_recv]}/{KEEP_ALERT_TIME}")
+                                if (self.lost_to_recover[idx_recv]) < KEEP_ALERT_TIME/(PACKET_LOSS_PRECISSION/PACKETS_PER_SECOND): 
+                                    #Mas o menos los paquetes que mandas en un segundo, si recibes en menos de 1 segundo la confirmacion y a lo mejor tendria que
+                                    #tardar 3
+                                    self.falsos_positivos+=1
+                                    if self.falsos_positivos > 1:
+                                        print()
+                                        self.tail_alpha = min(self.tail_alpha+0.05,0.5)
+                                        self.falsos_positivos = 0
+                                self.array_lost_marked[idx_recv] = None'''
+                        self.packets_received[idx_recv] = 0
+                        # limpieza de metadatos de este seq (ya procesado)
+                        self.packets_received[idx_recv] = 0
+                        self.send_timestamps[idx_recv] = 0.0
+                        self.send_seq[idx_recv] = 0
+                        self.array_lost_marked[idx_recv] = None
+                        self.lost_to_recover[idx_recv] = 0
+                        #logger.debug(f"[MEASURING RECEIVE RESP] n_seq:{unpacked_data[1]}: lat_up:{unpacked_data[3]} lat_down:{unpacked_data[4]} jit_up:{unpacked_data[5]} jit_down:{unpacked_data[6]} pl_up:{unpacked_data[7]} pl_down:{unpacked_data[8]} vehicle_id:{unpacked_data[9]}")
+                        
+                        if self.role=="server":
+                            self.latency_down,self.jitter_down,self.packet_loss_down = self.get_metrics(timestamp_recepcion,unpacked_data[2],self.latency_down,self.total_received)
+                            #logger.debug(f"[MEASURING (down)] Latency:{self.latency_down:.10f} Jitter: {self.jitter_down:.10f} Packet_loss: {self.packet_loss_down:.3f}")
+                        elif self.role=="client":
+                            self.latency_up,self.jitter_up,self.packet_loss_up = self.get_metrics(timestamp_recepcion,unpacked_data[2],self.latency_up,self.total_received)
+                            #logger.debug(f"[MEASURING (up)] Latency:{self.latency_up:.10f} Jitter: {self.jitter_up:.10f} Packet_loss: {self.packet_loss_up:.3f}")    
+                        
+                        #Combinacion de medidas
+                        self.latency_combined = COMBINED_FUNC(self.latency_up,self.latency_down,self.role)
+                        self.packet_loss_combined = COMBINED_FUNC(self.packet_loss_up,self.packet_loss_down,self.role)
+                        self.jitter_combined = COMBINED_FUNC(self.jitter_up,self.jitter_down,self.role)
+                        
+                        decoded_identifier = decode_identifier(unpacked_data[9])
+                        #print(f"[MEASURING:{decoded_identifier}] Lat:{self.latency_combined:.6f} Loss: {self.packet_loss_combined:.3f} Jitter: {self.jitter_combined:.3f} Conn: {self.connection_errors}", end="\r")
+                        #print(
+                        #f"[MEASURING:{decoded_identifier}]"
+                        #f" Lat:{self.latency_combined:.6f} Loss: {self.packet_loss_combined:.3f} "
+                        #f"Transit:{self.max_transit_packets:3d} "
+                        #f"falso_positivo:{self.falsos_positivos:3d} "
+                        #f"tiempo recuperacion:{self.lost_to_recover[idx_recv]}"
+                        #f"tiempo perdido-recepcion:{self.lost_to_recover[idx_recv]:.6f} "
+                        #f" Recibido/Mirando:{idx_recv:4d}({self.packets_received[idx_recv]})/{self.looking_packet:4d}({self.packets_received[self.looking_packet]}),"
+                        #f" Reco_ratio:{self.lost_recovered}/{self.lost_marked}={recovery_ratio}"
+                        #, end="\r")
+                        self.check_alert(self.latency_combined>=LATENCY_ALERT,self.packet_loss_combined>=PACKET_LOSS_ALERT, decoded_identifier)
+                        recv_end=time.perf_counter()
+                        self.process_time = recv_end - timestamp_recepcion
 
             except KeyboardInterrupt:
                 self.measuring=False
@@ -650,7 +633,7 @@ class q4s_lite_node():
         else:
             init = 0
         if init == 0:                
-            socket_timeout = 1#0.300 # Acordado en Valencia, ctag frena el coche con 250 milis sin mensajes
+            socket_timeout = 6.300 # Acordado en Valencia, ctag frena el coche con 250 milis sin mensajes
             self.socket.settimeout(socket_timeout)#un segundo antes de perdida de conex, mejor valor 360ms, podria ser una vble global, o a fuego por precaucion
             
             self.hilo_rcv = threading.Thread(target=self.measurement_receive_message, daemon=True, name="hilo_rcv")
@@ -689,7 +672,7 @@ def load_config(config_file):
     global VEHICLE_ID,PACKETS_PER_SECOND,PACKET_LOSS_PRECISSION,LATENCY_ALERT,PACKET_LOSS_ALERT, \
     server_address, server_port, client_address, client_port, NO_INIT, \
     KEEP_ALERT_TIME, KEEP_ALERT_TIME_PUBLICATO, TIME_BETWEEN_PINGS,MEASURES_COMBINATION_STRATEGY,COMBINED_FUNC, \
-    PACKET_FORMAT, PACKET_SIZE, OFFSET
+    PACKET_FORMAT, PACKET_SIZE, OFFSET, REAL_SCENARIO, TAIL_ALPHA
 
     config = configparser.ConfigParser()
 
@@ -713,26 +696,14 @@ def load_config(config_file):
     NO_INIT = general.getboolean('NO_INIT')
     MEASURES_COMBINATION_STRATEGY = general.getint('MEASURES_COMBINATION_STRATEGY')
     OFFSET = general.getint('OFFSET')
+    REAL_SCENARIO = general.getboolean('REAL_SCENARIO')
+    TAIL_ALPHA = general.getfloat('TAIL_ALPHA')
 
-    print('Q4s_lite Config params')
-    print("======================")
-    print(f"VEHICLE_ID = {VEHICLE_ID}")
-    print(f"PACKETS_PER_SECOND = {PACKETS_PER_SECOND}")
-    print(f"PACKET_LOSS_PRECISSION = {PACKET_LOSS_PRECISSION}")
-    print(f"LATENCY_ALERT = {LATENCY_ALERT}")
-    print(f"PACKET_LOSS_ALERT = {PACKET_LOSS_ALERT}")
-    print(f"server_address,server_port = {server_address},{server_port}")
-    print(f"client_address,client_port = {client_address},{client_port}")
-    print(f"MEASURES_COMBINATION_STRATEGY = {MEASURES_COMBINATION_STRATEGY}")
-    print(f"OFFSET = {OFFSET}" )
-
-
-    print("\nQ4s_lite Execution")
-    print("======================")
+    
 
     KEEP_ALERT_TIME = max(1,(PACKET_LOSS_PRECISSION / PACKETS_PER_SECOND)) #segundos que estas en estado de alerta a partir del cual vuelve a avisar al actuador, para no avisarle en todos los paquetes
     KEEP_ALERT_TIME_PUBLICATOR = 1
-    print(f"KEEP_ALERT_TIME={KEEP_ALERT_TIME}")
+    
 
     TIME_BETWEEN_PINGS = 1/PACKETS_PER_SECOND 
 

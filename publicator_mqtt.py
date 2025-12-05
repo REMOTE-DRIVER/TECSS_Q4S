@@ -13,6 +13,9 @@ import q4s_lite
 from paho.mqtt import client as mqtt
 
 
+#_MQTT_CLIENT = None
+#_Q4S_NODE = None
+
 DEFAULTS = {
     'GENERAL': {
         'VEHICLE_ID': "0001",
@@ -135,7 +138,9 @@ def compute_alert_code(q4s_node: "q4s_lite.q4s_lite_node") -> int:
 
 def compute_explanation(alert_code: int) -> str:
     if alert_code == 0:
-        return "sin alertas"
+        #return "conn"
+        #Solucion BUG: Alerta "sin alertas" responder conn, que se ha solapado con un timer
+        alert_code=4
     explanations = []
     if alert_code & 1:  # bit0: pérdida de paquetes
         explanations.append("pl")
@@ -149,9 +154,10 @@ def compute_explanation(alert_code: int) -> str:
 def compute_alert_level(alert_code: int) -> int:
     # baja --> 0,1,2,3 media --> 4,5,6 alta --> 7, recovery
     # nivel (0-3): 0=baja, 1=media, 2=alta, 3=recovery
-    if alert_code in (0, 1, 2, 3):
+
+    if alert_code in (1, 2, 3):
         return 0
-    elif alert_code in (4, 5, 6):
+    elif alert_code in (0, 4, 5, 6): #Solucion BUG: Alerta "sin alertas" El 0 aqui, porque s cuando se solapa una perdida de conexion y parece 0
         return 1
     elif alert_code == 7:
         return 2
@@ -161,6 +167,7 @@ def compute_alert_level(alert_code: int) -> int:
 
 def measures_publisher(q4s_node: "q4s_lite.q4s_lite_node", mqttc: mqtt.Client,
                        connected_evt: threading.Event, running_evt: threading.Event) -> None:
+    
     topic = f"RD/{decode_identifier(q4s_node.flow_id)}/QoS_status"
     while running_evt.is_set():
         if not connected_evt.wait(timeout=1):
@@ -169,6 +176,7 @@ def measures_publisher(q4s_node: "q4s_lite.q4s_lite_node", mqttc: mqtt.Client,
         mqttc.publish(topic, payload)
         print() 
         logger.debug("[PUB] %s -> %s", topic, payload)
+        #print("[PUB] %s -> %s", topic, payload)
 
         sleep_left = PUBLICATION_TIME
         while running_evt.is_set() and sleep_left > 0:
@@ -204,7 +212,7 @@ def alerts_publisher(q4s_node: "q4s_lite.q4s_lite_node", mqttc: mqtt.Client,
         logger.info("[ALERT] %s -> %s", topic, payload)
 
 
-def on_connect(client: mqtt.Client, userdata, flags, rc):
+'''def on_connect(client: mqtt.Client, userdata, flags, rc):
     print()
 
     if rc == 0:
@@ -226,14 +234,16 @@ def on_disconnect(client: mqtt.Client, userdata, rc):
 
 
 def on_publish(client, userdata, mid):
-    logger.debug("PUB mid=%s enviado correctamente", mid)
+    logger.debug("PUB mid=%s enviado correctamente", mid)'''
 
 
-_RUNNING_EVENT = threading.Event()
-_CONNECTED_EVENT = threading.Event()
+#_RUNNING_EVENT = threading.Event()
+#_CONNECTED_EVENT = threading.Event()
 
 
-def graceful_exit(_: int | None = None, __: object | None = None):
+#def graceful_exit(_: int | None = None, __: object | None = None):
+def graceful_exit(_MQTT_CLIENT,_Q4S_NODE,_CONNECTED_EVENT,_RUNNING_EVENT):
+    #global _MQTT_CLIENT,_Q4S_NODE,_CONNECTED_EVENT,_RUNNING_EVENT
     print() 
     logger.info("Parando publicador…")
     _RUNNING_EVENT.clear()
@@ -253,7 +263,26 @@ def graceful_exit(_: int | None = None, __: object | None = None):
 signal.signal(signal.SIGINT, graceful_exit)
 signal.signal(signal.SIGTERM, graceful_exit)
 
-def main(server_port = server_port):
+#def kill_publicator(event,q4s_node):
+def kill_publicator(event):
+    while True:
+        event.wait()
+        print("\nMe llega el evento")
+        event.set()
+        print("Closing publicator")
+        #publicator_alive=False
+        #graceful_exit()
+        #publicator_thread.join()
+        #q4s_node.running=False
+        #q4s_node.measuring=False
+        #q4s_node.hilo_snd.join()
+        #q4s_node.hilo_rcv.join()        
+        break
+    print("PUBLICATOR BYE")
+
+
+def main(server_port = server_port,kill_event = None):
+    #global _MQTT_CLIENT,_Q4S_NODE
     if len(sys.argv)==2:
         config_file = sys.argv[1]
     else:
@@ -261,6 +290,33 @@ def main(server_port = server_port):
 
     if not (os.path.exists(config_file)):
         print("\n[Q4S Lite CONFIG] Config file not found using default configuration values\n")
+
+    _RUNNING_EVENT = threading.Event()
+    _CONNECTED_EVENT = threading.Event()
+
+    def on_connect(client: mqtt.Client, userdata, flags, rc):
+        print()
+
+        if rc == 0:
+            logger.info("Conectado a %s:%s (RC=%s)", BROKER_HOST, BROKER_PORT, rc)
+            _CONNECTED_EVENT.set()
+
+            # Publica 'online' cuando la sesión está operativa
+            topic = f"RD/{client._client_id.decode()}/status"
+            client.publish(topic, "online")
+        else:
+            logger.error("Fallo al conectar (RC=%s)", rc)
+            _CONNECTED_EVENT.clear()
+
+
+    def on_disconnect(client: mqtt.Client, userdata, rc):
+        print() 
+        logger.warning("Desconectado (rc=%s)", rc)
+        _CONNECTED_EVENT.clear()
+
+
+    def on_publish(client, userdata, mid):
+        logger.debug("PUB mid=%s enviado correctamente", mid)
 
     _Q4S_NODE = q4s_lite.q4s_lite_node(
         role="server",
@@ -272,9 +328,13 @@ def main(server_port = server_port):
         config_file=config_file
     )
     _Q4S_NODE.run()
-
+    
     flow_txt = decode_identifier(_Q4S_NODE.flow_id)
+    while flow_txt == "": #En caso de reconexion, tiene que esperar un poco para conseguir el flow_id
+        flow_txt = decode_identifier(_Q4S_NODE.flow_id)
     client_id = f"q4s_{flow_txt}" 
+
+    print(f"\nclient_id:{client_id}\n")
 
     _MQTT_CLIENT = mqtt.Client(client_id=client_id)
     
@@ -288,7 +348,7 @@ def main(server_port = server_port):
     _MQTT_CLIENT.reconnect_delay_set(1, 60)
     
     try:
-        _MQTT_CLIENT.connect(BROKER_HOST, BROKER_PORT, keepalive=10000)
+        _MQTT_CLIENT.connect(BROKER_HOST, BROKER_PORT, keepalive=2*PUBLICATION_TIME)
     except Exception as e:
         logger.error("Error al conectar con el broker MQTT: %s", e)
         sys.exit(1)
@@ -296,6 +356,7 @@ def main(server_port = server_port):
     _MQTT_CLIENT.loop_start()
 
     _RUNNING_EVENT.set()
+    
     threading.Thread(target=measures_publisher, daemon=True,
                      name="measures_publisher",
                      args=(_Q4S_NODE, _MQTT_CLIENT, _CONNECTED_EVENT, _RUNNING_EVENT)).start()
@@ -304,13 +365,19 @@ def main(server_port = server_port):
                      args=(_Q4S_NODE, _MQTT_CLIENT, _CONNECTED_EVENT, _RUNNING_EVENT)).start()
 
     print()     
+    if kill_event is not None: #Estas en modo proxy y lanzas el hilo kill publicator
+        kill_publicator_thread = threading.Thread(target=kill_publicator,args=(kill_event,),daemon=True)
+        kill_publicator_thread.start()
+        kill_publicator_thread.join()#Todo probar sin join
+        graceful_exit(_MQTT_CLIENT,_Q4S_NODE,_CONNECTED_EVENT,_RUNNING_EVENT)
     logger.info("Publicador operativo. Pulsa 0 para salir…")
+
     try:
         while True:
             if input().strip() == "0":
-                graceful_exit()
+                graceful_exit(_MQTT_CLIENT,_Q4S_NODE,_CONNECTED_EVENT,_RUNNING_EVENT)
     except (KeyboardInterrupt, EOFError):
-        graceful_exit()
+        graceful_exit(_MQTT_CLIENT,_Q4S_NODE,_CONNECTED_EVENT,_RUNNING_EVENT)
 
 if __name__ == "__main__":
     main()

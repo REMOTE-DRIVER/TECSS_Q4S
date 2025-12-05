@@ -57,6 +57,8 @@ ASSIGN_FILE = "q4s_assignations.txt"
 pub_lock = threading.Lock()
 file_lock = threading.Lock()
 
+#Gestion de hilos publicadores
+publicator_threads = {}
 
 #Gestion de ficheros
 def file_get_port_from_car_id(car_id):
@@ -75,6 +77,16 @@ def file_write_assignation(car_id, port):
     with file_lock:
         with open(ASSIGN_FILE, "a") as f:
             f.write(f"{car_id}:{port}\n")
+
+def file_delete_assignation(car_id, port):
+    objetivo = f"{car_id}:{port}"
+    with open(ASSIGN_FILE, "r") as f:
+        lineas = f.readlines()
+
+    with open(ASSIGN_FILE, "w") as f:
+        for linea in lineas:
+            if linea.strip() != objetivo:
+                f.write(linea)
 
 def get_unused_port(puertos_disponibles):
     asignados = set()
@@ -104,18 +116,23 @@ def file_check_cars_running():
 
 #Check publicador
 def start_publicator(port):
+    global publicator_threads
     with pub_lock:
+        kill_publicator_event = threading.Event()
         if publicator_mode.upper() == "MQTT":
-            t = threading.Thread(target=publicator_mqtt.main,kwargs={"server_port": port},daemon=True,name=f"publicator-{port}")
+            t = threading.Thread(target=publicator_mqtt.main,kwargs={"server_port": port, "kill_event":kill_publicator_event},daemon=True,name=f"publicator-{port}")
         else:
-            t = threading.Thread(target=publicator_simple.main,kwargs={"server_port": port},daemon=True,name=f"publicator-{port}")
+            t = threading.Thread(target=publicator_simple.main,kwargs={"server_port": port, "kill_event":kill_publicator_event},daemon=True,name=f"publicator-{port}")
         t.start()
+        publicator_threads[port]={"thread": t, "kill_event":kill_publicator_event}
         print(f"Arrancado publicator en puerto {port}")
+
 
 
 
 #Gestion de cliente TCP, recepcion "hola"
 def handle_client_tcp(conn, addr):
+    global PUERTOS_DISPONIBLES, publicator_threads
     try:
         data = conn.recv(PACKET_SIZE)
         if not data:
@@ -133,13 +150,31 @@ def handle_client_tcp(conn, addr):
                 libres = get_unused_port(PUERTOS_DISPONIBLES)
                 if not libres:
                     print("ERROR: No hay puertos disponibles")
-                    return
+                    puerto_destino = -1
+                    packet_data = str(puerto_destino).ljust(5).encode(MSG_ENCODING)
+                    conn.send(packet_data)
+                    #return
                 puerto_destino = libres[0]
                 file_write_assignation(car_id, puerto_destino)
                 start_publicator(puerto_destino)
             # enviar puerto al cliente
             packet_data = str(puerto_destino).ljust(5).encode(MSG_ENCODING)
             conn.send(packet_data)
+
+        '''Si manda un ADIOS borra la linea y mete el puerto como disponible'''
+        if message_type == "BYE":
+            print(f"\nRecibido BYE de {car_id} ({addr})")
+            puerto_a_borrar = file_get_port_from_car_id(car_id)
+            file_delete_assignation(car_id, puerto_a_borrar)
+            #Terminar publicador de ese coche
+            publicator_threads[puerto_a_borrar]["kill_event"].set()
+            publicator_threads[puerto_a_borrar]["thread"].join()
+            #print(f"Puerto a borrar: {puerto_a_borrar}")
+            #print(f"Puertos disponibles: {PUERTOS_DISPONIBLES} type:{type(PUERTOS_DISPONIBLES)}")
+            #PUERTOS_DISPONIBLES.append(puerto_a_borrar)
+            #print(f"Quedan los siguientes puertos disponibles: {PUERTOS_DISPONIBLES}")
+            print("Pulsa 0 + Enter para terminar y vaciar fichero.")
+
 
     except Exception as e:
         print(f"Error procesando cliente {addr}: {e}")
