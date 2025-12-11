@@ -19,6 +19,7 @@ import math
 
 restas = 0
 recibidos_global = 0
+recibidos_global_resp = 0
 # Valores por defecto
 DEFAULTS = {
     'GENERAL': {
@@ -31,7 +32,8 @@ DEFAULTS = {
         'NO_INIT': False,
         'OFFSET':0,
         'MEASURES_COMBINATION_STRATEGY':0,
-        'REAL_SCENARIO': False
+        'REAL_SCENARIO': False,
+        'COTTON_TEST': False
     },
     'NETWORK': {
         'server_address': '127.0.0.1',
@@ -65,6 +67,7 @@ OFFSET = general.getint('OFFSET')
 MEASURES_COMBINATION_STRATEGY = general.getint('MEASURES_COMBINATION_STRATEGY')
 REAL_SCENARIO = general.getboolean('REAL_SCENARIO')
 WINDOW_SIZE = general.getint('WINDOW_SIZE')
+COTTON_TEST = general.getboolean('COTTON_TEST')
 
 PACKET_FORMAT = f">4sidffffffi{OFFSET}s"  # Formato de los datos
 PACKET_SIZE = 52 + OFFSET #bytes
@@ -386,6 +389,19 @@ class q4s_lite_node():
                     #if self.seq_number == GLOBAL_SEQ_SIZE-1:
                     #    print(f"\nSEQ_NUMBER: {self.seq_number}")
                     self.seq_number = (self.seq_number+1)%GLOBAL_SEQ_SIZE
+                    #Prueba del algodon, solo manda 10k paquetes, faltaria un sys.exit()
+                    #Para probarlo se podria desde aqui acceder al recibidos_global y calcular el porcentaje para que quede mas limpio
+                    if COTTON_TEST:
+                        if self.seq_number == 0: #Has mandado global seq_size
+                            #time.sleep(1)
+                            self.measuring=False
+                            #self.hilo_snd.join()
+                            #self.hilo_rcv.join()
+                            print(f"\nPings recibidos:{recibidos_global}, Resps recibidos:{recibidos_global_resp}\n"
+                            f"Pings perdidos: {(1-(recibidos_global/GLOBAL_SEQ_SIZE))*100}% "
+                            f"Resps perdidos:{(1-(recibidos_global_resp/GLOBAL_SEQ_SIZE))*100}%\n")
+                            sys.exit()
+
 
                     #Para medir los paquetes que envio en un segundo
                     '''if self.seq_number % PACKETS_PER_SECOND == 0:
@@ -474,7 +490,7 @@ class q4s_lite_node():
 
 
     def measurement_receive_message(self):
-        global last_print,old_time_paquetes, old_paquetes_l_r,smoothed_plr, old_paquetes_l_r_2, restas, recibidos_global
+        global last_print, restas, recibidos_global, recibidos_global_resp
         sent_packets = 0
         paquetes_l_r = 0
         while self.measuring:
@@ -494,7 +510,9 @@ class q4s_lite_node():
                 if self.role=="server":
                     self.flow_id = unpacked_data[9]
                 if message_type == "PING": #PING
-                    #recibidos_global+=1
+                    #Prueba del algodon
+                    if COTTON_TEST:
+                        recibidos_global+=1
                     #print(f"Recibidos_global={recibidos_global}")
                     self.update_measures(unpacked_data)
                     #logger.debug(f"[MEASURING RECEIVE PING] n_seq:{unpacked_data[1]}: lat_up:{unpacked_data[3]} lat_down:{unpacked_data[4]} jit_up:{unpacked_data[5]} jit_down:{unpacked_data[6]} pl_up:{unpacked_data[7]} pl_down:{unpacked_data[8]} vehicle_id:{unpacked_data[9]}")
@@ -503,6 +521,10 @@ class q4s_lite_node():
                     self.socket.sendto(packet,self.target_address)
                     
                 elif message_type == "RESP": #RESP  
+                    #Prueba del algodon
+                    if COTTON_TEST:
+                        recibidos_global_resp+=1
+                    #print(f"Recibidos_global_resp={recibidos_global_resp}")
                     n_seq_actual = unpacked_data[1]              
                     with self.lock:
 
@@ -676,7 +698,7 @@ def load_config(config_file):
     global VEHICLE_ID,PACKETS_PER_SECOND,GLOBAL_SEQ_SIZE,LATENCY_ALERT,PACKET_LOSS_ALERT, \
     server_address, server_port, client_address, client_port, NO_INIT, \
     KEEP_ALERT_TIME, KEEP_ALERT_TIME_PUBLICATOR, TIME_BETWEEN_PINGS,MEASURES_COMBINATION_STRATEGY,COMBINED_FUNC, \
-    PACKET_FORMAT, PACKET_SIZE, OFFSET, REAL_SCENARIO, WINDOW_SIZE
+    PACKET_FORMAT, PACKET_SIZE, OFFSET, REAL_SCENARIO, WINDOW_SIZE, COTTON_TEST
 
     config = configparser.ConfigParser()
 
@@ -702,6 +724,7 @@ def load_config(config_file):
     OFFSET = general.getint('OFFSET')
     REAL_SCENARIO = general.getboolean('REAL_SCENARIO')
     WINDOW_SIZE = general.getint('WINDOW_SIZE')
+    COTTON_TEST = general.getboolean('COTTON_TEST')
 
     
 
