@@ -40,6 +40,9 @@ DEFAULTS = {
         'server_port': 20001,
         'client_address': '127.0.0.1',
         'client_port': 20002,
+        'bind_all': True,
+        'bind_ip': '0.0.0.0',
+        'bind_port': 20004
     }
 }
 
@@ -68,6 +71,9 @@ MEASURES_COMBINATION_STRATEGY = general.getint('MEASURES_COMBINATION_STRATEGY')
 REAL_SCENARIO = general.getboolean('REAL_SCENARIO')
 WINDOW_SIZE = general.getint('WINDOW_SIZE')
 COTTON_TEST = general.getboolean('COTTON_TEST')
+BIND_ALL = network.getboolean('bind_all')
+BIND_IP = network.get('bind_ip')
+BIND_PORT = network.getint('bind_port')
 
 PACKET_FORMAT = f">4sidffffffi{OFFSET}s"  # Formato de los datos
 PACKET_SIZE = 52 + OFFSET #bytes
@@ -142,8 +148,10 @@ class q4s_lite_node():
         self.port = port
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         if role=="server": #El cliente no hace bind para reutilizar el socket
-            self.socket.bind(('0.0.0.0', port))
-
+            if BIND_ALL:
+                self.socket.bind(('0.0.0.0', port)) #Escucha en todas las interfaces porque con ip publica puede no saber a que interfaz escuchar
+            else:
+                self.socket.bind((BIND_IP,BIND_PORT))
         try:
             self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 0)
             #self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 0)
@@ -329,6 +337,7 @@ class q4s_lite_node():
         #smoothed_latency= new_latency #Comentar esta linea si hago amortiguacion
         #loss
         loss = 1-(total_received/WINDOW_SIZE)
+        #print(f"        loss = 1 - ({total_received}/{WINDOW_SIZE})= {loss}")
         if loss < 0:
             loss = 0
         if loss>=1:
@@ -531,7 +540,7 @@ class q4s_lite_node():
                         self.packets_received[n_seq_actual] = 0
                         self.total_received += 1
                         self.total_received = min(self.total_received,WINDOW_SIZE+1)
-                        
+                        #print(f"Llega el paquete {n_seq_actual} total_received={self.total_received}")
                         #la ventana termina en el n_seq_actual, ahora mismo
                         #La ventana empieza en el n_seq_actual - 300, ahora mismo - 1 segundo
                         #si el paquete en n_seq_ini (inico de la ventana) 
@@ -543,7 +552,7 @@ class q4s_lite_node():
                         #tengo q quitar los paquetes recibidos entre n_seq_ini y new_n_seq_ini
                         inicio = self.n_seq_ini
                         fin = new_n_seq_ini
-                        
+                        #print(f"    Inicio:{inicio} Fin: {fin}", end="")
                         if inicio > fin:
                             #Hemos ciclado
                             if (inicio-fin)>WINDOW_SIZE//2:
@@ -555,7 +564,7 @@ class q4s_lite_node():
 
                         #fin = (inicio+10)%GLOBAL_SEQ_SIZE
                         #print(f"\ni,f y diferencia: {inicio},{fin} y {fin-inicio}")
-                        
+                        #print(f"====> Inicio:{inicio} Fin: {fin}")
                         restas = 0
                         for i in range(inicio,fin):
                             j = i%GLOBAL_SEQ_SIZE
@@ -565,7 +574,7 @@ class q4s_lite_node():
                                 self.packets_received[j] = 2 #Proteccion frente al desorden_protection de llegada de paquetes, solo se cuenta una vez
 
                         self.n_seq_ini = new_n_seq_ini
-                        #print(f"\nRestas: {restas}")
+                        #print(f"    Restas: {restas}")
                         
                         #logger.debug(f"[MEASURING RECEIVE RESP] n_seq:{unpacked_data[1]}: lat_up:{unpacked_data[3]} lat_down:{unpacked_data[4]} jit_up:{unpacked_data[5]} jit_down:{unpacked_data[6]} pl_up:{unpacked_data[7]} pl_down:{unpacked_data[8]} vehicle_id:{unpacked_data[9]}")
                         
@@ -698,7 +707,7 @@ def load_config(config_file):
     global VEHICLE_ID,PACKETS_PER_SECOND,GLOBAL_SEQ_SIZE,LATENCY_ALERT,PACKET_LOSS_ALERT, \
     server_address, server_port, client_address, client_port, NO_INIT, \
     KEEP_ALERT_TIME, KEEP_ALERT_TIME_PUBLICATOR, TIME_BETWEEN_PINGS,MEASURES_COMBINATION_STRATEGY,COMBINED_FUNC, \
-    PACKET_FORMAT, PACKET_SIZE, OFFSET, REAL_SCENARIO, WINDOW_SIZE, COTTON_TEST
+    PACKET_FORMAT, PACKET_SIZE, OFFSET, REAL_SCENARIO, WINDOW_SIZE, COTTON_TEST, BIND_ALL, BIND_IP, BIND_PORT
 
     config = configparser.ConfigParser()
 
@@ -725,6 +734,9 @@ def load_config(config_file):
     REAL_SCENARIO = general.getboolean('REAL_SCENARIO')
     WINDOW_SIZE = general.getint('WINDOW_SIZE')
     COTTON_TEST = general.getboolean('COTTON_TEST')
+    BIND_ALL = network.getboolean('bind_all')
+    BIND_IP = network.get('bind_ip')
+    BIND_PORT = network.getint('bind_port')
 
     
 
