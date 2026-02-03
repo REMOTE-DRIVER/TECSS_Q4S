@@ -108,7 +108,7 @@ MEASURE_COMBINATIONS = [lambda x,y,z: (x+y)/2,
 COMBINED_FUNC = MEASURE_COMBINATIONS[MEASURES_COMBINATION_STRATEGY]
 
 #Tiempo en segundos para medir los errores de conexion
-CONNECTION_ERROR_TIME_MARGIN = 1.2
+CONNECTION_ERROR_TIME_MARGIN = 1
 
 #Configuracion de logging: logger.info (en adelante) en consola y fichero, logger.debug solo en fichero
 logger = logging.getLogger('q4s_logger')
@@ -593,12 +593,14 @@ class q4s_lite_node():
                         decoded_identifier = decode_identifier(unpacked_data[9])
 
                         #Comprobar que funciona bien
-                        if self.latency_combined>=0.300:
+                        if self.latency_combined>=300:
+                            if self.connection_errors == 0:
+                                self.first_connection_error_time = time.perf_counter()
                             self.connection_errors+=1
-                            if time.perf_counter()-self.first_connection_error_time >= CONNECTION_ERROR_TIME_MARGIN:
-                                self.connection_errors = 0
+                            #if time.perf_counter()-self.first_connection_error_time >= CONNECTION_ERROR_TIME_MARGIN:
+                            #    self.connection_errors = 0
                                 
-                        print(f"[MEASURING:{decoded_identifier}] Lat:{self.latency_combined:.6f} Loss: {self.packet_loss_combined:.3f} Jitter: {self.jitter_combined:.3f} Conn: {self.connection_errors}", end="\r")
+                        print(f"[MEASURING:{decoded_identifier}] Lat:{self.latency_combined:.6f} Loss: {self.packet_loss_combined:.3f} Jitter: {self.jitter_combined:.3f} Conn: {self.connection_errors:3d}", end="\r")
                         #print(
                         #f"[MEASURING:{decoded_identifier}]"
                         #f" Lat:{self.latency_combined:.6f} Loss: {self.packet_loss_combined:.3f} Jitter: {self.jitter_combined:.3f}"
