@@ -1,6 +1,7 @@
 import threading, time, sys, logging
 from paho.mqtt import client as mqtt
 from pathlib import Path
+import datetime
 
 def load_password(file_name: str = "password.txt") -> str:
     path = Path(__file__).with_name(file_name)   # mismo directorio que el .py
@@ -22,7 +23,8 @@ def on_connect(cli, _u, _f, rc):
         print("CONNACK rc", rc)
 
 def on_message(_cli, _u, msg):
-    print(msg.topic, msg.payload.decode())
+    #print(msg.topic, msg.payload.decode())
+    print(msg.topic, msg.payload.decode(), datetime.datetime.now())
 
 cli = mqtt.Client(protocol=mqtt.MQTTv311)
 cli.username_pw_set("nokiatecss", password)

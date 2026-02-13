@@ -33,7 +33,8 @@ DEFAULTS = {
         'OFFSET':0,
         'MEASURES_COMBINATION_STRATEGY':0,
         'REAL_SCENARIO': False,
-        'COTTON_TEST': False
+        'COTTON_TEST': False,
+        'MAX_LATENCY_MS': 500
     },
     'NETWORK': {
         'server_address': '127.0.0.1',
@@ -71,6 +72,7 @@ MEASURES_COMBINATION_STRATEGY = general.getint('MEASURES_COMBINATION_STRATEGY')
 REAL_SCENARIO = general.getboolean('REAL_SCENARIO')
 WINDOW_SIZE = general.getint('WINDOW_SIZE')
 COTTON_TEST = general.getboolean('COTTON_TEST')
+MAX_LATENCY_MS = general.getint('MAX_LATENCY_MS')
 BIND_ALL = network.getboolean('bind_all')
 BIND_IP = network.get('bind_ip')
 BIND_PORT = network.getint('bind_port')
@@ -259,6 +261,7 @@ class q4s_lite_node():
                             logger.info("[INIT CONNECTION] SERVER: Error, invalid confirmation")
                             return -1
                 else:#Reset te llegan ping o resp del otro extremo, pasas directamente a la fase de medicion
+                    self.flow_id = data_rcvd[9]
                     logger.info(f"[RESET CONNECTION] SERVER: Received PING or RESP message, going directly into Measurement stage")
                     return 0
             except socket.timeout:
@@ -489,6 +492,7 @@ class q4s_lite_node():
                     self.event_publicator.set()
                     logger.debug(f"[ALERT]:  Vehicle_id: {flow_id} Latency:{alert_latency} Packet_loss: {alert_packet_loss}")
                     printalert(f"\n[ALERT]:  Vehicle_id: {flow_id} Latency:{alert_latency} Packet_loss: {alert_packet_loss} Connection Error: {self.connection_errors}")
+                    #print(f"\n[ALERT]:  Vehicle_id: {flow_id} Latency:{alert_latency} Packet_loss: {alert_packet_loss} Connection Error: {self.connection_errors}\n")
             else:
                 self.state[0]="normal"
                 self.state[1]=time.perf_counter()
@@ -593,7 +597,7 @@ class q4s_lite_node():
                         decoded_identifier = decode_identifier(unpacked_data[9])
 
                         #Comprobar que funciona bien
-                        if self.latency_combined>=300:
+                        if self.latency_combined>=MAX_LATENCY_MS: #Si la latencia es en un sentido, solo mido la mitad
                             if self.connection_errors == 0:
                                 self.first_connection_error_time = time.perf_counter()
                             self.connection_errors+=1
@@ -628,6 +632,10 @@ class q4s_lite_node():
                 self.measuring=False
             except (ConnectionResetError,socket.timeout):
                 #No esta levantado el otro extremo
+                if self.connection_errors == 0:
+                    self.first_connection_error_time = time.perf_counter()                    
+                    #print("\n")
+                self.connection_errors+=1
                 if time.perf_counter()-self.state[2]>=KEEP_ALERT_TIME_PUBLICATOR:
                     self.state[0] = "alert"
                     self.state[2] = time.perf_counter()
@@ -635,13 +643,14 @@ class q4s_lite_node():
                     #print()
                     decoded_identifier = decode_identifier(self.flow_id)
                     #printalert(f"[ALERT] CONNECTION ERROR Vehicle_id: {decoded_identifier} Conn: {self.connection_errors}")
-                if self.connection_errors == 0:
+                    #print(f"\n[ALERT] CONNECTION ERROR Vehicle_id: {decoded_identifier} Conn: {self.connection_errors}\n")
+                '''if self.connection_errors == 0:
                     self.first_connection_error_time = time.perf_counter()                    
                     #print("\n")
-                self.connection_errors+=1
+                self.connection_errors+=1'''
                 try:
                     printalert(f"[ALERT] CONNECTION ERROR Vehicle_id: {decoded_identifier}  in last {CONNECTION_ERROR_TIME_MARGIN} second: {self.connection_errors}\t\t", end="\r") 
-                    #printalert(f"\n[ALERT] CONNECTION ERROR Vehicle_id: {decoded_identifier}  in last {CONNECTION_ERROR_TIME_MARGIN} second: {self.connection_errors}\t\t", end="\n") 
+                    #print(f"\n[ALERT2] CONNECTION ERROR Vehicle_id: {decoded_identifier}  in last {CONNECTION_ERROR_TIME_MARGIN} second: {self.connection_errors}\t\t", end="\n") 
                 except:
                     continue
                 if time.perf_counter()-self.first_connection_error_time >= CONNECTION_ERROR_TIME_MARGIN:
@@ -670,7 +679,7 @@ class q4s_lite_node():
         else:
             init = 0
         if init == 0:                
-            socket_timeout = 0.300 # Acordado en Valencia, ctag frena el coche con 250 milis sin mensajes
+            socket_timeout = (MAX_LATENCY_MS/1000)*2#0.300 # Acordado en Valencia, ctag frena el coche con 250 milis sin mensajes
             self.socket.settimeout(socket_timeout)
             
             self.hilo_rcv = threading.Thread(target=self.measurement_receive_message, daemon=True, name="hilo_rcv")
@@ -709,7 +718,8 @@ def load_config(config_file):
     global VEHICLE_ID,PACKETS_PER_SECOND,GLOBAL_SEQ_SIZE,LATENCY_ALERT,PACKET_LOSS_ALERT, \
     server_address, server_port, client_address, client_port, NO_INIT, \
     KEEP_ALERT_TIME, KEEP_ALERT_TIME_PUBLICATOR, TIME_BETWEEN_PINGS,MEASURES_COMBINATION_STRATEGY,COMBINED_FUNC, \
-    PACKET_FORMAT, PACKET_SIZE, OFFSET, REAL_SCENARIO, WINDOW_SIZE, COTTON_TEST, BIND_ALL, BIND_IP, BIND_PORT
+    PACKET_FORMAT, PACKET_SIZE, OFFSET, REAL_SCENARIO, WINDOW_SIZE, COTTON_TEST, BIND_ALL, BIND_IP, BIND_PORT, \
+    MAX_LATENCY_MS
 
     config = configparser.ConfigParser()
 
@@ -736,6 +746,7 @@ def load_config(config_file):
     REAL_SCENARIO = general.getboolean('REAL_SCENARIO')
     WINDOW_SIZE = general.getint('WINDOW_SIZE')
     COTTON_TEST = general.getboolean('COTTON_TEST')
+    MAX_LATENCY_MS = general.getint('MAX_LATENCY_MS')
     BIND_ALL = network.getboolean('bind_all')
     BIND_IP = network.get('bind_ip')
     BIND_PORT = network.getint('bind_port')

@@ -541,7 +541,7 @@ def main():
                 if sub_option == '0':
                     break
                 elif sub_option == '1':
-                    q4s_node.packet_loss_decoration += 0.2
+                    q4s_node.packet_loss_decoration += 0.1
                     send_command(f"SET_LOSS:10")
                 elif sub_option == '2':
                     q4s_node.packet_loss_decoration = 0
@@ -552,7 +552,7 @@ def main():
                     send_command(f"SET_BER:0")
                     q4s_node.packet_loss_decoration += 0
                 elif sub_option == "5":
-                    q4s_node.packet_loss_decoration = 0.4
+                    q4s_node.packet_loss_decoration = 0.2
                     #send_command(f"SET_LOSS:10")
                     send_command(f"SET_BER:30000")
                 elif sub_option=="6":

@@ -251,7 +251,9 @@ def graceful_exit(_MQTT_CLIENT,_Q4S_NODE,_CONNECTED_EVENT,_RUNNING_EVENT):
         if _CONNECTED_EVENT.is_set():
             _MQTT_CLIENT.publish(f"RD/{_MQTT_CLIENT._client_id.decode()}/status", "offline")
             time.sleep(0.2)
+            
         _MQTT_CLIENT.loop_stop()
+        #time.sleep(2) #En windows para que el socket tcp se desconecte
         _MQTT_CLIENT.disconnect()
     finally:
         _Q4S_NODE.measuring = False
