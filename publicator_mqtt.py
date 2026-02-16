@@ -71,7 +71,7 @@ server_address= network.get('server_address')
 server_port= network.getint('server_port')
 client_address= network.get('client_address')
 client_port= network.getint('client_port')
-PUBLICATION_TIME = publicator.getint('PUBLICATION_TIME')
+PUBLICATION_TIME = publicator.getfloat('PUBLICATION_TIME')
 #PUBLICATION_ALERT_TIME = publicator.getint('PUBLICATION_ALERT_TIME')
 
 
@@ -350,7 +350,8 @@ def main(server_port = server_port,kill_event = None):
     _MQTT_CLIENT.reconnect_delay_set(1, 60)
     
     try:
-        _MQTT_CLIENT.connect(BROKER_HOST, BROKER_PORT, keepalive=2*PUBLICATION_TIME)
+        #_MQTT_CLIENT.connect(BROKER_HOST, BROKER_PORT, keepalive=2*PUBLICATION_TIME)
+        _MQTT_CLIENT.connect(BROKER_HOST, BROKER_PORT, keepalive=20)
     except Exception as e:
         logger.error("Error al conectar con el broker MQTT: %s", e)
         sys.exit(1)

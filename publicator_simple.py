@@ -62,7 +62,7 @@ server_address= network.get('server_address')
 server_port= network.getint('server_port')
 client_address= network.get('client_address')
 client_port= network.getint('client_port')
-PUBLICATION_TIME = publicator.getint('PUBLICATION_TIME')
+PUBLICATION_TIME = publicator.getfloat('PUBLICATION_TIME')
 #PUBLICATION_ALERT_TIME = publicator.getint('PUBLICATION_ALERT_TIME')
 
 
