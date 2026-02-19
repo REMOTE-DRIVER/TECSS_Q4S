@@ -18,7 +18,7 @@ STOP = threading.Event()
 def on_connect(cli, _u, _f, rc):
     if rc == 0:
         #cli.subscribe("RD/#")
-        cli.subscribe("RD/7777/#")
+        cli.subscribe("RD/7778/#")
     else:
         print("CONNACK rc", rc)
 

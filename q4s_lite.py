@@ -153,7 +153,10 @@ class q4s_lite_node():
             if BIND_ALL:
                 self.socket.bind(('0.0.0.0', port)) #Escucha en todas las interfaces porque con ip publica puede no saber a que interfaz escuchar
             else:
-                self.socket.bind((BIND_IP,BIND_PORT))
+                if BIND_PORT == self.port:
+                    self.socket.bind((BIND_IP,BIND_PORT))
+                else: #En este caso te ha abierto un publicador con un puerto especifico que le dio el proxy
+                    self.socket.bind((BIND_IP,self.port))
         try:
             self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 0)
             #self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 0)

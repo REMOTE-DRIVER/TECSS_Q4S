@@ -32,6 +32,8 @@ proxy = config['PROXY']
 default_listening_port = proxy.getint('DEFAULT_LISTENING_PORT')
 available_ports = ast.literal_eval(proxy.get("AVAILABLE_PORTS"))
 publicator_mode = proxy.get("PUBLICATOR")
+proxy_bind_all = proxy.getboolean('PROXY_BIND_ALL')
+default_server_ip = proxy.get('DEFAULT_SERVER_IP')
 
 print("Puerto principal:", default_listening_port)
 print("Puertos disponibles:", available_ports)
@@ -185,7 +187,10 @@ def handle_client_tcp(conn, addr):
 def main():
     # TCP socket
     p_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    p_socket.bind(("0.0.0.0", default_listening_port))
+    if proxy_bind_all:
+        p_socket.bind(("0.0.0.0", default_listening_port))
+    else:
+        p_socket.bind((default_server_ip, default_listening_port))
     p_socket.listen()
     print(f"Proxy TCP escuchando en puerto {default_listening_port}")
 
